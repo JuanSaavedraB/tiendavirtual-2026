@@ -1,0 +1,33 @@
+{
+  "name": "serverless",
+  "version": "1.0.0",
+  "description": "",
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "lint": "eslint .",
+    "test": "jest",
+    "docker-build": "../../scripts/docker-build.sh \"sixflags/fims-processor/lambda:latest\" \"functions/fims-processor/Dockerfile\"",
+    "docker-run": "../../scripts/docker-run.sh \"functions/fims-processor/.env\" \"sixflags/fims-processor/lambda:latest\"",
+    "local-invoke": "curl -s \"http://localhost:9000/2015-03-31/functions/function/invocations\" -d '{\"payload\":\"hello world!\"}' | tee /dev/tty"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.15.0",
+    "@types/aws-lambda": "^8.10.146",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.13.10",
+    "eslint": "^9.15.0",
+    "globals": "^15.12.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.16.0"
+  },
+  "dependencies": {
+    "axios": "^1.9.0"
+  }
+}
