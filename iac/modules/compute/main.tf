@@ -193,22 +193,27 @@ resource "aws_route_table_association" "asociacion_subnet_publica_adicional_alb"
 }
 
 locals {
-  subnet_ids_alb = length(var.public_subnet_ids) > 0 ? var.public_subnet_ids : distinct(concat(
-    local.discovered_public_subnet_ids,
-    local.create_additional_public_subnet_for_alb ? [aws_subnet.subnet_publica_adicional_alb[0].id] : []
-  ))
+  existing_subnet_ids_for_alb = length(var.public_subnet_ids) > 0 ? var.public_subnet_ids : local.discovered_public_subnet_ids
 }
 
 data "aws_subnet" "sub_redes_alb" {
-  for_each = toset(local.subnet_ids_alb)
+  for_each = toset(local.existing_subnet_ids_for_alb)
 
   id = each.value
 }
 
 locals {
-  alb_availability_zones = distinct([
+  existing_alb_availability_zones = distinct([
     for subnet in data.aws_subnet.sub_redes_alb : subnet.availability_zone
   ])
+  subnet_ids_alb = distinct(concat(
+    local.existing_subnet_ids_for_alb,
+    aws_subnet.subnet_publica_adicional_alb[*].id
+  ))
+  alb_availability_zones = distinct(concat(
+    local.existing_alb_availability_zones,
+    local.create_additional_public_subnet_for_alb ? [var.additional_public_subnet_availability_zone] : []
+  ))
 }
 
 data "aws_security_group" "grupo_seguridad_por_defecto" {
