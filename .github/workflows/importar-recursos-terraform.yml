@@ -1,18 +1,12 @@
-name: Destruir Infraestructura AWS
+name: Importar Recursos Terraform
 
 on:
   workflow_dispatch:
-    inputs:
-      confirm_destroy:
-        description: 'Escribe DESTRUIR para confirmar'
-        required: true
-        type: string
 
 jobs:
-  destroy:
+  importar:
     runs-on: ubuntu-latest
     environment: main
-    if: ${{ inputs.confirm_destroy == 'DESTRUIR' }}
 
     env:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -24,6 +18,7 @@ jobs:
       BUCKET: ${{ vars.BUCKET }}
       LOCKS: ${{ vars.LOCKS }}
       TF_STATE_KEY: ${{ vars.TF_STATE_KEY || 'backend-terraform.tfstate' }}
+      PUBLIC_SUBNET_IDS_JSON: ${{ vars.PUBLIC_SUBNET_IDS_JSON || '[]' }}
       TF_VAR_region: ${{ vars.AWS_REGION }}
       TF_VAR_project_name: ${{ vars.PROJECT_NAME || 'tienda-virtual' }}
       TF_VAR_environment: ${{ vars.ENVIRONMENT || 'main' }}
@@ -48,14 +43,14 @@ jobs:
       - name: Recuperar el código
         uses: actions/checkout@v5
 
-      - name: Configurar las credenciales AWS
+      - name: Configurar credenciales AWS
         run: |
           aws configure set aws_access_key_id "$AWS_ACCESS_KEY_ID"
           aws configure set aws_secret_access_key "$AWS_SECRET_ACCESS_KEY"
           aws configure set aws_session_token "$AWS_SESSION_TOKEN"
           aws configure set region "$AWS_REGION"
 
-      - name: Verificar las credenciales
+      - name: Verificar identidad AWS
         run: aws sts get-caller-identity
 
       - name: Build Lambda Functions
@@ -69,7 +64,7 @@ jobs:
         with:
           terraform_version: 1.10.5
 
-      - name: Inicializar Terraform
+      - name: Inicializar Terraform contra state remoto
         run: |
           test -n "$BUCKET"
           test -n "$LOCKS"
@@ -82,6 +77,39 @@ jobs:
             -backend-config="region=${BACKEND_REGION}"
         working-directory: iac
 
-      - name: Destruir infraestructura con Terraform
-        run: terraform destroy -auto-approve
+      - name: Importar recursos existentes si faltan en el state
+        run: |
+          set -euo pipefail
+
+          import_if_missing() {
+            local address="$1"
+            local id="$2"
+
+            if terraform state list | grep -Fx "$address" >/dev/null 2>&1; then
+              echo "Ya existe en state: $address"
+              return
+            fi
+
+            if [ -z "$id" ] || [ "$id" = "None" ]; then
+              echo "No se encontró ID remoto para $address; se omite."
+              return
+            fi
+
+            terraform import "$address" "$id"
+          }
+
+          LOG_GROUP="/ecs/${TF_VAR_nombre_servicio_ecs}"
+          LOG_GROUP_NAME="$(aws logs describe-log-groups --log-group-name-prefix "$LOG_GROUP" --region "$AWS_REGION" --query "logGroups[?logGroupName=='$LOG_GROUP'].logGroupName | [0]" --output text 2>/dev/null || true)"
+          TG_ARN="$(aws elbv2 describe-target-groups --names "$TF_VAR_nombre_target_group" --region "$AWS_REGION" --query 'TargetGroups[0].TargetGroupArn' --output text 2>/dev/null || true)"
+          ALB_ARN="$(aws elbv2 describe-load-balancers --names "$TF_VAR_nombre_load_balancer" --region "$AWS_REGION" --query 'LoadBalancers[0].LoadBalancerArn' --output text 2>/dev/null || true)"
+          EVENT_BUS_NAME="$(aws events describe-event-bus --name "$TF_VAR_nombre_event_bus" --region "$AWS_REGION" --query 'Name' --output text 2>/dev/null || true)"
+
+          import_if_missing 'module.compute.aws_cloudwatch_log_group.ecs_logs' "$LOG_GROUP_NAME"
+          import_if_missing 'module.compute.aws_lb_target_group.tg_tienda_virtual' "$TG_ARN"
+          import_if_missing 'module.compute.aws_lb.tienda_virtual_load_balancer' "$ALB_ARN"
+          import_if_missing 'module.events.aws_cloudwatch_event_bus.ordenes_bus' "$EVENT_BUS_NAME"
+        working-directory: iac
+
+      - name: Plan posterior al import
+        run: terraform plan
         working-directory: iac

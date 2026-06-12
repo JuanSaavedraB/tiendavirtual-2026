@@ -1,5 +1,10 @@
 resource "aws_ecs_cluster" "cluster_tienda_virtual_servicios" {
   name = var.nombre_cluster
+
+  tags = {
+    Project     = var.project_name
+    Environment = var.environment
+  }
 }
 
 resource "aws_ecs_task_definition" "definicion_tarea_tienda_virtual" {
@@ -56,22 +61,49 @@ resource "aws_ecs_task_definition" "definicion_tarea_tienda_virtual" {
 resource "aws_cloudwatch_log_group" "ecs_logs" {
   name              = "/ecs/${var.nombre_servicio_ecs}"
   retention_in_days = 7
+
+  tags = {
+    Project     = var.project_name
+    Environment = var.environment
+  }
 }
 
 data "aws_vpc" "vpc_por_defecto" {
+  count = var.vpc_id == "" ? 1 : 0
+
   default = true
 }
 
-data "aws_subnets" "sub_redes_por_defecto" {
+locals {
+  vpc_id_seleccionada = var.vpc_id != "" ? var.vpc_id : data.aws_vpc.vpc_por_defecto[0].id
+}
+
+data "aws_subnets" "sub_redes_vpc_seleccionada" {
   filter {
     name   = "vpc-id"
-    values = [data.aws_vpc.vpc_por_defecto.id]
+    values = [local.vpc_id_seleccionada]
   }
+}
+
+locals {
+  subnet_ids_alb = length(var.public_subnet_ids) > 0 ? var.public_subnet_ids : data.aws_subnets.sub_redes_vpc_seleccionada.ids
+}
+
+data "aws_subnet" "sub_redes_alb" {
+  for_each = toset(local.subnet_ids_alb)
+
+  id = each.value
+}
+
+locals {
+  alb_availability_zones = distinct([
+    for subnet in data.aws_subnet.sub_redes_alb : subnet.availability_zone
+  ])
 }
 
 data "aws_security_group" "grupo_seguridad_por_defecto" {
   name   = "default"
-  vpc_id = data.aws_vpc.vpc_por_defecto.id
+  vpc_id = local.vpc_id_seleccionada
 }
 
 resource "aws_ecs_service" "servicio_tienda_virtual" {
@@ -88,7 +120,7 @@ resource "aws_ecs_service" "servicio_tienda_virtual" {
   }
 
   network_configuration {
-    subnets          = data.aws_subnets.sub_redes_por_defecto.ids
+    subnets          = local.subnet_ids_alb
     security_groups  = [data.aws_security_group.grupo_seguridad_por_defecto.id]
     assign_public_ip = true
   }
@@ -130,18 +162,42 @@ resource "aws_appautoscaling_policy" "politica_de_autoescalamiento_ecs" {
 }
 
 resource "aws_lb" "tienda_virtual_load_balancer" {
-  name               = "tienda-virtual-alb"
+  name               = var.nombre_load_balancer
   internal           = false
   load_balancer_type = "application"
-  subnets            = data.aws_subnets.sub_redes_por_defecto.ids
+  subnets            = local.subnet_ids_alb
   security_groups    = [data.aws_security_group.grupo_seguridad_por_defecto.id]
+
+  tags = {
+    Project     = var.project_name
+    Environment = var.environment
+  }
+
+  lifecycle {
+    precondition {
+      condition     = length(local.subnet_ids_alb) >= 2
+      error_message = "El ALB requiere al menos dos subnets públicas. Define public_subnet_ids con dos o más subnets."
+    }
+
+    precondition {
+      condition     = length(local.alb_availability_zones) >= 2
+      error_message = "El ALB requiere subnets en al menos dos Availability Zones distintas."
+    }
+
+    precondition {
+      condition = alltrue([
+        for subnet in data.aws_subnet.sub_redes_alb : subnet.vpc_id == local.vpc_id_seleccionada
+      ])
+      error_message = "Todas las subnets del ALB deben pertenecer a la VPC seleccionada."
+    }
+  }
 }
 
 resource "aws_lb_target_group" "tg_tienda_virtual" {
-  name        = "tg-tienda-virtual"
+  name        = var.nombre_target_group
   port        = 8080
   protocol    = "HTTP"
-  vpc_id      = data.aws_vpc.vpc_por_defecto.id
+  vpc_id      = local.vpc_id_seleccionada
   target_type = "ip"
 
   health_check {
@@ -151,6 +207,11 @@ resource "aws_lb_target_group" "tg_tienda_virtual" {
     healthy_threshold   = 2
     unhealthy_threshold = 2
     matcher             = "200"
+  }
+
+  tags = {
+    Project     = var.project_name
+    Environment = var.environment
   }
 }
 

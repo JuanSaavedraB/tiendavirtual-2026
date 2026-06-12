@@ -1,3 +1,13 @@
+variable "project_name" {
+  type        = string
+  description = "Nombre base del proyecto para etiquetas"
+}
+
+variable "environment" {
+  type        = string
+  description = "Ambiente del despliegue para etiquetas"
+}
+
 variable "nombre_cluster" {
   type        = string
   description = "Nombre del clúster ECS donde se desplegará la tarea"
@@ -50,4 +60,31 @@ variable "contrasenha_base_datos" {
 variable "nombre_servicio_ecs" {
   type        = string
   description = "Nombre del servicio ECS donde se desplegará la tarea"
+}
+
+variable "nombre_load_balancer" {
+  type        = string
+  description = "Nombre del Application Load Balancer"
+}
+
+variable "nombre_target_group" {
+  type        = string
+  description = "Nombre del Target Group"
+}
+
+variable "vpc_id" {
+  type        = string
+  description = "ID de VPC existente. Si está vacío, se usa la VPC por defecto."
+  default     = ""
+}
+
+variable "public_subnet_ids" {
+  type        = list(string)
+  description = "Subnets públicas para ALB/ECS. Si está vacío, se usan las subnets de la VPC seleccionada."
+  default     = []
+
+  validation {
+    condition     = length(var.public_subnet_ids) == 0 || length(var.public_subnet_ids) >= 2
+    error_message = "public_subnet_ids debe estar vacío o contener al menos dos subnets públicas."
+  }
 }

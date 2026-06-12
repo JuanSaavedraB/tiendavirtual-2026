@@ -14,6 +14,31 @@ jobs:
       AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
       AWS_REGION: ${{ vars.AWS_REGION }}
       AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      BACKEND_REGION: ${{ vars.BACKEND_REGION || vars.AWS_REGION }}
+      BUCKET: ${{ vars.BUCKET }}
+      LOCKS: ${{ vars.LOCKS }}
+      TF_STATE_KEY: ${{ vars.TF_STATE_KEY || 'backend-terraform.tfstate' }}
+      NOMBRE_REPO_ECR: ${{ vars.NOMBRE_REPO_ECR || 'tienda-virtual' }}
+      PUBLIC_SUBNET_IDS_JSON: ${{ vars.PUBLIC_SUBNET_IDS_JSON || '[]' }}
+      TF_VAR_region: ${{ vars.AWS_REGION }}
+      TF_VAR_project_name: ${{ vars.PROJECT_NAME || 'tienda-virtual' }}
+      TF_VAR_environment: ${{ vars.ENVIRONMENT || 'main' }}
+      TF_VAR_id_cuenta_aws: ${{ vars.AWS_ACCOUNT_ID }}
+      TF_VAR_nombre_rol_iam: ${{ vars.NOMBRE_ROL_IAM }}
+      TF_VAR_path_base_servicio: ${{ vars.PATH_BASE_SERVICIO }}
+      TF_VAR_nombre_cluster_ecs: ${{ vars.NOMBRE_CLUSTER }}
+      TF_VAR_familia_tarea_ecs: ${{ vars.FAMILIA_TAREA_ECS }}
+      TF_VAR_nombre_repo_ecr: ${{ vars.NOMBRE_REPO_ECR || 'tienda-virtual' }}
+      TF_VAR_host_base_datos: ${{ vars.HOST_BASE_DATOS }}
+      TF_VAR_nombre_base_datos: ${{ vars.NOMBRE_BASE_DATOS }}
+      TF_VAR_usuario_base_datos: ${{ vars.USUARIO_BASE_DATOS }}
+      TF_VAR_contrasenha_base_datos: ${{ secrets.CONTRASENHA_BASE_DATOS }}
+      TF_VAR_nombre_servicio_ecs: ${{ vars.NOMBRE_SERVICIO }}
+      TF_VAR_nombre_load_balancer: ${{ vars.NOMBRE_LOAD_BALANCER || 'tienda-virtual-alb' }}
+      TF_VAR_nombre_target_group: ${{ vars.NOMBRE_TARGET_GROUP || 'tg-tienda-virtual' }}
+      TF_VAR_nombre_event_bus: ${{ vars.NOMBRE_EVENT_BUS || 'ordenes-bus' }}
+      TF_VAR_vpc_id: ${{ vars.VPC_ID }}
+      TF_VAR_public_subnet_ids: ${{ vars.PUBLIC_SUBNET_IDS_JSON || '[]' }}
 
     steps:
       - name: Recuperar el código
@@ -51,16 +76,20 @@ jobs:
 
       - name: Iniciar Sesión en ECR
         run: |
-          aws ecr get-login-password | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+          aws ecr get-login-password | docker login --username AWS --password-stdin "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 
-      - name: Crear el reposiorio ECR si no existe
+      - name: Crear el repositorio ECR si no existe
         run: |
-          aws ecr describe-repositories --repository-names tienda-virtual || aws ecr create-repository --repository-name tienda-virtual
+          if aws ecr describe-repositories --repository-names "$NOMBRE_REPO_ECR" >/dev/null 2>&1; then
+            echo "El repositorio ECR ya existe: $NOMBRE_REPO_ECR"
+          else
+            aws ecr create-repository --repository-name "$NOMBRE_REPO_ECR"
+          fi
 
       - name: Push Docker image
         run: |
-          docker tag tienda-virtual ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/tienda-virtual
-          docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/tienda-virtual
+          docker tag tienda-virtual "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${NOMBRE_REPO_ECR}:latest"
+          docker push "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${NOMBRE_REPO_ECR}:latest"
 
       - name: Build Lambda Functions
         run: |
@@ -74,24 +103,33 @@ jobs:
           terraform_version: 1.10.5
 
       - name: Inicializar Terraform
-        run: terraform init -backend-config "bucket=${{ vars.BUCKET }}" -backend-config "dynamodb_table=${{ vars.LOCKS }}"
+        run: |
+          test -n "$BUCKET"
+          test -n "$LOCKS"
+          test -n "$TF_STATE_KEY"
+          test -n "$BACKEND_REGION"
+          terraform init \
+            -backend-config="bucket=${BUCKET}" \
+            -backend-config="dynamodb_table=${LOCKS}" \
+            -backend-config="key=${TF_STATE_KEY}" \
+            -backend-config="region=${BACKEND_REGION}"
+        working-directory: iac
+
+      - name: Validar Terraform
+        run: terraform validate
+        working-directory: iac
+
+      - name: Validar formato de subnets
+        run: |
+          echo "$PUBLIC_SUBNET_IDS_JSON" | jq -e 'type == "array" and all(.[]; type == "string")' >/dev/null
+          echo "PUBLIC_SUBNET_IDS_JSON contiene $(echo "$PUBLIC_SUBNET_IDS_JSON" | jq 'length') subnets."
+
+      - name: Planificar Terraform
+        run: terraform plan
         working-directory: iac
 
       - name: Aplicar Terraform
-        run: |
-          terraform apply \
-            -var="id_cuenta_aws=${{ vars.AWS_ACCOUNT_ID }}" \
-            -var="nombre_rol_iam=${{ vars.NOMBRE_ROL_IAM }}" \
-            -var="path_base_servicio=${{ vars.PATH_BASE_SERVICIO }}" \
-            -var="nombre_cluster_ecs=${{ vars.NOMBRE_CLUSTER }}" \
-            -var="familia_tarea_ecs=${{ vars.FAMILIA_TAREA_ECS }}" \
-            -var="nombre_repo_ecr=${{ vars.NOMBRE_REPO_ECR }}" \
-            -var="host_base_datos=${{ vars.HOST_BASE_DATOS }}" \
-            -var="nombre_base_datos=${{ vars.NOMBRE_BASE_DATOS }}" \
-            -var="usuario_base_datos=${{ vars.USUARIO_BASE_DATOS }}" \
-            -var="contrasenha_base_datos=${{ secrets.CONTRASENHA_BASE_DATOS }}" \
-            -var="nombre_servicio_ecs=${{ vars.NOMBRE_SERVICIO }}" \
-            -auto-approve
+        run: terraform apply -auto-approve
         working-directory: iac
 
       - name: Forzar nuevo despliegue ECS

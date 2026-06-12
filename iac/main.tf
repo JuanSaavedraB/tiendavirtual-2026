@@ -21,6 +21,8 @@ module "serverless" {
 
 module "compute" {
   source                 = "./modules/compute"
+  project_name           = var.project_name
+  environment            = var.environment
   nombre_cluster         = var.nombre_cluster_ecs
   familia_tarea          = var.familia_tarea_ecs
   rol_lab_arn            = local.rol_lab_arn
@@ -32,10 +34,15 @@ module "compute" {
   usuario_base_datos     = var.usuario_base_datos
   contrasenha_base_datos = var.contrasenha_base_datos
   nombre_servicio_ecs    = var.nombre_servicio_ecs
+  nombre_load_balancer   = var.nombre_load_balancer
+  nombre_target_group    = var.nombre_target_group
+  vpc_id                 = var.vpc_id
+  public_subnet_ids      = var.public_subnet_ids
 }
 
 module "events" {
   source                   = "./modules/events"
+  nombre_event_bus         = var.nombre_event_bus
   crear_orden_funcion_arn  = module.serverless.crear_orden_funcion_arn
   crear_orden_funcion_name = module.serverless.crear_orden_funcion_name
 }
@@ -46,4 +53,19 @@ module "api" {
   rol_lab_arn        = local.rol_lab_arn
   event_bus_name     = module.events.event_bus_name
   path_base_servicio = local.path_base_servicio_normalizado
+}
+
+output "compute_vpc_id" {
+  description = "VPC usada por el módulo compute"
+  value       = module.compute.vpc_id
+}
+
+output "alb_subnet_ids" {
+  description = "Subnets usadas por el ALB"
+  value       = module.compute.alb_subnet_ids
+}
+
+output "alb_availability_zones" {
+  description = "Availability Zones de las subnets usadas por el ALB"
+  value       = module.compute.alb_availability_zones
 }

@@ -5,3 +5,7 @@ target
 *.iml
 *.ipr
 application.properties
+.terraform/
+*.tfstate
+*.tfstate.*
+iac/data/*.zip

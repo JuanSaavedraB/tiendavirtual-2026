@@ -1,0 +1,29 @@
+region = "us-east-1"
+
+project_name = "tienda-virtual"
+environment  = "main"
+
+id_cuenta_aws       = "123456789012"
+nombre_rol_iam      = "LabRole"
+path_base_servicio  = "api"
+nombre_cluster_ecs  = "tienda-virtual-cluster"
+familia_tarea_ecs   = "tienda-virtual"
+nombre_repo_ecr     = "tienda-virtual"
+host_base_datos     = "mysql.example.us-east-1.rds.amazonaws.com"
+nombre_base_datos   = "tienda_virtual"
+usuario_base_datos  = "admin"
+contrasenha_base_datos = "cambiar-en-tu-tfvars-local"
+nombre_servicio_ecs = "tienda-virtual-servicio"
+
+# Mantienen compatibilidad con los recursos existentes. Cambiarlos crea recursos nuevos.
+nombre_load_balancer = "tienda-virtual-alb"
+nombre_target_group  = "tg-tienda-virtual"
+nombre_event_bus     = "ordenes-bus"
+
+# Recomendado cuando no quieres depender de la VPC por defecto.
+# Las subnets deben ser publicas y pertenecer al menos a dos AZs distintas.
+# vpc_id = "vpc-xxxxxxxxxxxxxxxxx"
+# public_subnet_ids = [
+#   "subnet-xxxxxxxxxxxxxxxxx",
+#   "subnet-yyyyyyyyyyyyyyyyy",
+# ]
