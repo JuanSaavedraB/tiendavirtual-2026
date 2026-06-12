@@ -33,6 +33,29 @@ variable "public_subnet_ids" {
   }
 }
 
+variable "create_missing_public_subnet_for_alb" {
+  description = "Crea una subnet pública adicional para el ALB cuando public_subnet_ids está vacío y la VPC seleccionada tiene menos de dos subnets."
+  type        = bool
+  default     = false
+}
+
+variable "additional_public_subnet_cidr_block" {
+  description = "CIDR de la subnet pública adicional para el ALB. Debe estar dentro del CIDR de la VPC y no solaparse con subnets existentes."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.additional_public_subnet_cidr_block == "" || can(cidrhost(var.additional_public_subnet_cidr_block, 0))
+    error_message = "additional_public_subnet_cidr_block debe estar vacío o ser un CIDR válido, por ejemplo 172.31.32.0/20."
+  }
+}
+
+variable "additional_public_subnet_availability_zone" {
+  description = "Availability Zone para la subnet pública adicional del ALB, por ejemplo us-east-1b."
+  type        = string
+  default     = ""
+}
+
 variable "id_cuenta_aws" {
   description = "ID de la cuenta de AWS donde se desplegarán los recursos"
   type        = string

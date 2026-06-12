@@ -75,7 +75,8 @@ data "aws_vpc" "vpc_por_defecto" {
 }
 
 locals {
-  vpc_id_seleccionada = var.vpc_id != "" ? var.vpc_id : data.aws_vpc.vpc_por_defecto[0].id
+  vpc_id_seleccionada           = var.vpc_id != "" ? var.vpc_id : data.aws_vpc.vpc_por_defecto[0].id
+  additional_public_subnet_name = "${var.project_name}-${var.environment}-alb-public-subnet-extra"
 }
 
 data "aws_subnets" "sub_redes_vpc_seleccionada" {
@@ -85,8 +86,117 @@ data "aws_subnets" "sub_redes_vpc_seleccionada" {
   }
 }
 
+data "aws_subnets" "subnet_publica_adicional_alb_existente" {
+  filter {
+    name   = "vpc-id"
+    values = [local.vpc_id_seleccionada]
+  }
+
+  filter {
+    name   = "tag:Name"
+    values = [local.additional_public_subnet_name]
+  }
+}
+
+data "aws_subnet" "sub_redes_descubiertas" {
+  for_each = toset(data.aws_subnets.sub_redes_vpc_seleccionada.ids)
+
+  id = each.value
+}
+
 locals {
-  subnet_ids_alb = length(var.public_subnet_ids) > 0 ? var.public_subnet_ids : data.aws_subnets.sub_redes_vpc_seleccionada.ids
+  discovered_public_subnet_ids = data.aws_subnets.sub_redes_vpc_seleccionada.ids
+  discovered_subnet_azs = distinct([
+    for subnet in data.aws_subnet.sub_redes_descubiertas : subnet.availability_zone
+  ])
+  discovered_subnet_cidr_blocks = [
+    for subnet in data.aws_subnet.sub_redes_descubiertas : subnet.cidr_block
+  ]
+  additional_public_subnet_already_exists = length(data.aws_subnets.subnet_publica_adicional_alb_existente.ids) > 0
+  create_additional_public_subnet_for_alb = (
+    length(var.public_subnet_ids) == 0 &&
+    var.create_missing_public_subnet_for_alb &&
+    (length(local.discovered_public_subnet_ids) < 2 || local.additional_public_subnet_already_exists)
+  )
+}
+
+data "aws_internet_gateway" "internet_gateway_vpc_seleccionada" {
+  count = local.create_additional_public_subnet_for_alb ? 1 : 0
+
+  filter {
+    name   = "attachment.vpc-id"
+    values = [local.vpc_id_seleccionada]
+  }
+}
+
+resource "aws_subnet" "subnet_publica_adicional_alb" {
+  count = local.create_additional_public_subnet_for_alb ? 1 : 0
+
+  vpc_id                  = local.vpc_id_seleccionada
+  cidr_block              = var.additional_public_subnet_cidr_block
+  availability_zone       = var.additional_public_subnet_availability_zone
+  map_public_ip_on_launch = true
+
+  tags = {
+    Name        = local.additional_public_subnet_name
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "terraform"
+  }
+
+  lifecycle {
+    precondition {
+      condition     = var.additional_public_subnet_cidr_block != ""
+      error_message = "additional_public_subnet_cidr_block es obligatorio cuando create_missing_public_subnet_for_alb=true y la VPC tiene menos de dos subnets."
+    }
+
+    precondition {
+      condition     = var.additional_public_subnet_availability_zone != ""
+      error_message = "additional_public_subnet_availability_zone es obligatorio cuando create_missing_public_subnet_for_alb=true y la VPC tiene menos de dos subnets."
+    }
+
+    precondition {
+      condition     = local.additional_public_subnet_already_exists || !contains(local.discovered_subnet_azs, var.additional_public_subnet_availability_zone)
+      error_message = "La subnet adicional debe crearse en una Availability Zone distinta a las subnets existentes."
+    }
+
+    precondition {
+      condition     = local.additional_public_subnet_already_exists || !contains(local.discovered_subnet_cidr_blocks, var.additional_public_subnet_cidr_block)
+      error_message = "El CIDR de la subnet adicional ya existe en la VPC seleccionada."
+    }
+  }
+}
+
+resource "aws_route_table" "tabla_rutas_subnet_publica_adicional_alb" {
+  count = local.create_additional_public_subnet_for_alb ? 1 : 0
+
+  vpc_id = local.vpc_id_seleccionada
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = data.aws_internet_gateway.internet_gateway_vpc_seleccionada[0].id
+  }
+
+  tags = {
+    Name        = "${var.project_name}-${var.environment}-alb-public-rt-extra"
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "terraform"
+  }
+}
+
+resource "aws_route_table_association" "asociacion_subnet_publica_adicional_alb" {
+  count = local.create_additional_public_subnet_for_alb ? 1 : 0
+
+  subnet_id      = aws_subnet.subnet_publica_adicional_alb[0].id
+  route_table_id = aws_route_table.tabla_rutas_subnet_publica_adicional_alb[0].id
+}
+
+locals {
+  subnet_ids_alb = length(var.public_subnet_ids) > 0 ? var.public_subnet_ids : distinct(concat(
+    local.discovered_public_subnet_ids,
+    local.create_additional_public_subnet_for_alb ? [aws_subnet.subnet_publica_adicional_alb[0].id] : []
+  ))
 }
 
 data "aws_subnet" "sub_redes_alb" {

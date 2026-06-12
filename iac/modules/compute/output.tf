@@ -25,3 +25,13 @@ output "alb_availability_zones" {
   description = "Availability Zones de las subnets usadas por el ALB"
   value       = local.alb_availability_zones
 }
+
+output "created_additional_public_subnet_for_alb" {
+  description = "Indica si Terraform creó una subnet pública adicional para el ALB"
+  value       = local.create_additional_public_subnet_for_alb
+}
+
+output "additional_public_subnet_id" {
+  description = "ID de la subnet pública adicional creada para el ALB, si aplica"
+  value       = local.create_additional_public_subnet_for_alb ? aws_subnet.subnet_publica_adicional_alb[0].id : null
+}

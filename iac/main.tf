@@ -20,24 +20,27 @@ module "serverless" {
 }
 
 module "compute" {
-  source                 = "./modules/compute"
-  project_name           = var.project_name
-  environment            = var.environment
-  nombre_cluster         = var.nombre_cluster_ecs
-  familia_tarea          = var.familia_tarea_ecs
-  rol_lab_arn            = local.rol_lab_arn
-  id_cuenta_aws          = var.id_cuenta_aws
-  region_aws             = var.region
-  nombre_repo_ecr        = var.nombre_repo_ecr
-  host_base_datos        = var.host_base_datos
-  nombre_base_datos      = var.nombre_base_datos
-  usuario_base_datos     = var.usuario_base_datos
-  contrasenha_base_datos = var.contrasenha_base_datos
-  nombre_servicio_ecs    = var.nombre_servicio_ecs
-  nombre_load_balancer   = var.nombre_load_balancer
-  nombre_target_group    = var.nombre_target_group
-  vpc_id                 = var.vpc_id
-  public_subnet_ids      = var.public_subnet_ids
+  source                                     = "./modules/compute"
+  project_name                               = var.project_name
+  environment                                = var.environment
+  nombre_cluster                             = var.nombre_cluster_ecs
+  familia_tarea                              = var.familia_tarea_ecs
+  rol_lab_arn                                = local.rol_lab_arn
+  id_cuenta_aws                              = var.id_cuenta_aws
+  region_aws                                 = var.region
+  nombre_repo_ecr                            = var.nombre_repo_ecr
+  host_base_datos                            = var.host_base_datos
+  nombre_base_datos                          = var.nombre_base_datos
+  usuario_base_datos                         = var.usuario_base_datos
+  contrasenha_base_datos                     = var.contrasenha_base_datos
+  nombre_servicio_ecs                        = var.nombre_servicio_ecs
+  nombre_load_balancer                       = var.nombre_load_balancer
+  nombre_target_group                        = var.nombre_target_group
+  vpc_id                                     = var.vpc_id
+  public_subnet_ids                          = var.public_subnet_ids
+  create_missing_public_subnet_for_alb       = var.create_missing_public_subnet_for_alb
+  additional_public_subnet_cidr_block        = var.additional_public_subnet_cidr_block
+  additional_public_subnet_availability_zone = var.additional_public_subnet_availability_zone
 }
 
 module "events" {
@@ -68,4 +71,14 @@ output "alb_subnet_ids" {
 output "alb_availability_zones" {
   description = "Availability Zones de las subnets usadas por el ALB"
   value       = module.compute.alb_availability_zones
+}
+
+output "created_additional_public_subnet_for_alb" {
+  description = "Indica si Terraform creó una subnet pública adicional para el ALB"
+  value       = module.compute.created_additional_public_subnet_for_alb
+}
+
+output "additional_public_subnet_id" {
+  description = "ID de la subnet pública adicional creada para el ALB, si aplica"
+  value       = module.compute.additional_public_subnet_id
 }

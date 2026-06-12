@@ -118,6 +118,29 @@ public_subnet_ids = [
 
 Valida manualmente que las subnets sean públicas, es decir, que su route table tenga ruta `0.0.0.0/0` hacia un Internet Gateway. Terraform valida cantidad y AZs distintas, pero no reemplaza la revisión de rutas.
 
+### Learner Lab con una sola subnet por defecto
+
+En algunos laboratorios AWS Academy/Learner Lab la VPC por defecto solo tiene una subnet pública. En ese caso el ALB no puede crearse hasta tener otra subnet pública en una AZ distinta.
+
+Opciones evaluadas:
+
+- Opción A: configurar `PUBLIC_SUBNET_IDS_JSON` con dos subnets existentes. Es lo más simple si ya existen.
+- Opción B: crear una subnet pública adicional en Terraform cuando la VPC solo tiene una. Es la opción recomendada para este laboratorio porque queda versionada y reproducible.
+- Opción C: crear dos subnets públicas gestionadas por Terraform. Es más invasiva y cambia más la red del laboratorio.
+- Opción D: crear la subnet manualmente. Funciona, pero deja infraestructura fuera del código.
+
+Para usar la opción B, deja `PUBLIC_SUBNET_IDS_JSON` como `[]` y configura estas variables de GitHub Actions:
+
+```text
+CREATE_MISSING_PUBLIC_SUBNET_FOR_ALB=true
+ADDITIONAL_PUBLIC_SUBNET_CIDR_BLOCK=172.31.32.0/20
+ADDITIONAL_PUBLIC_SUBNET_AVAILABILITY_ZONE=us-east-1b
+```
+
+Antes de fijar el CIDR, ejecuta el diagnóstico y revisa los CIDR existentes de la VPC. Si la subnet actual usa `172.31.16.0/20`, `172.31.32.0/20` suele ser una opción razonable en una VPC default `172.31.0.0/16`, pero no debe usarse si ya aparece ocupado. La subnet adicional se crea con `map_public_ip_on_launch = true`, una route table propia y ruta `0.0.0.0/0` hacia el Internet Gateway existente de la VPC.
+
+Si configuras dos subnets existentes en `PUBLIC_SUBNET_IDS_JSON`, Terraform usa esas subnets y no crea la subnet adicional.
+
 ## Variables de entrada relevantes
 
 - `id_cuenta_aws`: ID de cuenta AWS.
@@ -127,6 +150,9 @@ Valida manualmente que las subnets sean públicas, es decir, que su route table 
 - `nombre_base_datos`: nombre de la base de datos MySQL.
 - `vpc_id`: VPC existente para ECS y ALB; opcional si usas la VPC por defecto.
 - `public_subnet_ids`: subnets públicas para el ALB; deben cubrir al menos dos AZs.
+- `create_missing_public_subnet_for_alb`: habilita la creación controlada de una subnet pública adicional para el ALB.
+- `additional_public_subnet_cidr_block`: CIDR de esa subnet adicional; debe validarse contra los CIDR existentes.
+- `additional_public_subnet_availability_zone`: AZ distinta a la subnet existente, por ejemplo `us-east-1b`.
 - `nombre_load_balancer`, `nombre_target_group`, `nombre_event_bus`: nombres de recursos globales/regionales que pueden colisionar si reutilizas cuenta y región entre ambientes.
 
 Con esas variables, Terraform deriva automáticamente:

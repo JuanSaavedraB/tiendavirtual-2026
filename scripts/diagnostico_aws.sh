@@ -12,6 +12,9 @@ NOMBRE_SERVICIO="${NOMBRE_SERVICIO:-${TF_VAR_nombre_servicio_ecs:-tienda-virtual
 NOMBRE_LOAD_BALANCER="${NOMBRE_LOAD_BALANCER:-${TF_VAR_nombre_load_balancer:-tienda-virtual-alb}}"
 NOMBRE_TARGET_GROUP="${NOMBRE_TARGET_GROUP:-${TF_VAR_nombre_target_group:-tg-tienda-virtual}}"
 NOMBRE_EVENT_BUS="${NOMBRE_EVENT_BUS:-${TF_VAR_nombre_event_bus:-ordenes-bus}}"
+CREATE_MISSING_PUBLIC_SUBNET_FOR_ALB="${CREATE_MISSING_PUBLIC_SUBNET_FOR_ALB:-${TF_VAR_create_missing_public_subnet_for_alb:-false}}"
+ADDITIONAL_PUBLIC_SUBNET_CIDR_BLOCK="${ADDITIONAL_PUBLIC_SUBNET_CIDR_BLOCK:-${TF_VAR_additional_public_subnet_cidr_block:-}}"
+ADDITIONAL_PUBLIC_SUBNET_AVAILABILITY_ZONE="${ADDITIONAL_PUBLIC_SUBNET_AVAILABILITY_ZONE:-${TF_VAR_additional_public_subnet_availability_zone:-}}"
 
 section() {
   printf '\n== %s ==\n' "$1"
@@ -60,6 +63,10 @@ else
   echo "VPC_ID definido: $VPC_ID"
 fi
 
+if [ -n "$VPC_ID" ] && [ "$VPC_ID" != "None" ]; then
+  run_json "CIDR de la VPC seleccionada:" aws ec2 describe-vpcs --vpc-ids "$VPC_ID" --region "$AWS_REGION" --query 'Vpcs[].{VpcId:VpcId,CidrBlock:CidrBlock,CidrBlockAssociationSet:CidrBlockAssociationSet[].CidrBlock}' --output json
+fi
+
 if ! echo "$PUBLIC_SUBNET_IDS_JSON" | jq -e 'type == "array" and all(.[]; type == "string")' >/dev/null; then
   echo "PUBLIC_SUBNET_IDS_JSON no es una lista JSON de strings: $PUBLIC_SUBNET_IDS_JSON"
   exit 1
@@ -79,6 +86,26 @@ printf 'Subnets evaluadas:\n'
 printf '  %s\n' "${SUBNET_IDS[@]}"
 
 run_json "Detalle de subnets:" aws ec2 describe-subnets --subnet-ids "${SUBNET_IDS[@]}" --region "$AWS_REGION" --query 'Subnets[].{SubnetId:SubnetId,VpcId:VpcId,AZ:AvailabilityZone,MapPublicIpOnLaunch:MapPublicIpOnLaunch,CidrBlock:CidrBlock,AvailableIpAddressCount:AvailableIpAddressCount}' --output json
+
+AZ_COUNT="$(aws ec2 describe-subnets --subnet-ids "${SUBNET_IDS[@]}" --region "$AWS_REGION" --output json | jq '[.Subnets[].AvailabilityZone] | unique | length')"
+echo "Cantidad de subnets evaluadas: ${#SUBNET_IDS[@]}"
+echo "Cantidad de Availability Zones distintas: $AZ_COUNT"
+
+if [ "${#SUBNET_IDS[@]}" -lt 2 ] || [ "$AZ_COUNT" -lt 2 ]; then
+  echo "El ALB no puede crearse con esta selección actual de subnets."
+  if [ "$CREATE_MISSING_PUBLIC_SUBNET_FOR_ALB" = "true" ]; then
+    echo "CREATE_MISSING_PUBLIC_SUBNET_FOR_ALB=true: Terraform intentará crear una subnet pública adicional si PUBLIC_SUBNET_IDS_JSON está vacío."
+    echo "CIDR adicional configurado: ${ADDITIONAL_PUBLIC_SUBNET_CIDR_BLOCK:-<vacío>}"
+    echo "AZ adicional configurada: ${ADDITIONAL_PUBLIC_SUBNET_AVAILABILITY_ZONE:-<vacío>}"
+    if [ -z "$ADDITIONAL_PUBLIC_SUBNET_CIDR_BLOCK" ] || [ -z "$ADDITIONAL_PUBLIC_SUBNET_AVAILABILITY_ZONE" ]; then
+      echo "Faltan ADDITIONAL_PUBLIC_SUBNET_CIDR_BLOCK o ADDITIONAL_PUBLIC_SUBNET_AVAILABILITY_ZONE."
+    fi
+  else
+    echo "Configura PUBLIC_SUBNET_IDS_JSON con al menos dos subnets públicas en AZs distintas o habilita CREATE_MISSING_PUBLIC_SUBNET_FOR_ALB=true con CIDR/AZ adicionales."
+  fi
+else
+  echo "La selección actual cumple el mínimo de subnets/AZs para un ALB."
+fi
 
 section "Route tables"
 for subnet_id in "${SUBNET_IDS[@]}"; do

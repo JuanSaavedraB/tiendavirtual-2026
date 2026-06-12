@@ -38,6 +38,9 @@ jobs:
       TF_VAR_nombre_event_bus: ${{ vars.NOMBRE_EVENT_BUS || 'ordenes-bus' }}
       TF_VAR_vpc_id: ${{ vars.VPC_ID }}
       TF_VAR_public_subnet_ids: ${{ vars.PUBLIC_SUBNET_IDS_JSON || '[]' }}
+      TF_VAR_create_missing_public_subnet_for_alb: ${{ vars.CREATE_MISSING_PUBLIC_SUBNET_FOR_ALB || 'false' }}
+      TF_VAR_additional_public_subnet_cidr_block: ${{ vars.ADDITIONAL_PUBLIC_SUBNET_CIDR_BLOCK || '' }}
+      TF_VAR_additional_public_subnet_availability_zone: ${{ vars.ADDITIONAL_PUBLIC_SUBNET_AVAILABILITY_ZONE || '' }}
 
     steps:
       - name: Recuperar el código

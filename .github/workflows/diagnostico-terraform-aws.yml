@@ -24,6 +24,9 @@ jobs:
       NOMBRE_LOAD_BALANCER: ${{ vars.NOMBRE_LOAD_BALANCER || 'tienda-virtual-alb' }}
       NOMBRE_TARGET_GROUP: ${{ vars.NOMBRE_TARGET_GROUP || 'tg-tienda-virtual' }}
       NOMBRE_EVENT_BUS: ${{ vars.NOMBRE_EVENT_BUS || 'ordenes-bus' }}
+      CREATE_MISSING_PUBLIC_SUBNET_FOR_ALB: ${{ vars.CREATE_MISSING_PUBLIC_SUBNET_FOR_ALB || 'false' }}
+      ADDITIONAL_PUBLIC_SUBNET_CIDR_BLOCK: ${{ vars.ADDITIONAL_PUBLIC_SUBNET_CIDR_BLOCK || '' }}
+      ADDITIONAL_PUBLIC_SUBNET_AVAILABILITY_ZONE: ${{ vars.ADDITIONAL_PUBLIC_SUBNET_AVAILABILITY_ZONE || '' }}
 
     steps:
       - name: Recuperar el código

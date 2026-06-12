@@ -27,3 +27,9 @@ nombre_event_bus     = "ordenes-bus"
 #   "subnet-xxxxxxxxxxxxxxxxx",
 #   "subnet-yyyyyyyyyyyyyyyyy",
 # ]
+
+# Alternativa para AWS Academy/Learner Lab cuando la VPC por defecto solo tiene una subnet.
+# Valida primero que el CIDR esté dentro de la VPC y no se solape con subnets existentes.
+# create_missing_public_subnet_for_alb       = true
+# additional_public_subnet_cidr_block        = "172.31.32.0/20"
+# additional_public_subnet_availability_zone = "us-east-1b"
