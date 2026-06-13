@@ -14,34 +14,6 @@ jobs:
       AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
       AWS_REGION: ${{ vars.AWS_REGION }}
       AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
-      BACKEND_REGION: ${{ vars.BACKEND_REGION || vars.AWS_REGION }}
-      BUCKET: ${{ vars.BUCKET }}
-      LOCKS: ${{ vars.LOCKS }}
-      TF_STATE_KEY: ${{ vars.TF_STATE_KEY || 'backend-terraform.tfstate' }}
-      NOMBRE_REPO_ECR: ${{ vars.NOMBRE_REPO_ECR || 'tienda-virtual' }}
-      PUBLIC_SUBNET_IDS_JSON: ${{ vars.PUBLIC_SUBNET_IDS_JSON || '[]' }}
-      TF_VAR_region: ${{ vars.AWS_REGION }}
-      TF_VAR_project_name: ${{ vars.PROJECT_NAME || 'tienda-virtual' }}
-      TF_VAR_environment: ${{ vars.ENVIRONMENT || 'main' }}
-      TF_VAR_id_cuenta_aws: ${{ vars.AWS_ACCOUNT_ID }}
-      TF_VAR_nombre_rol_iam: ${{ vars.NOMBRE_ROL_IAM }}
-      TF_VAR_path_base_servicio: ${{ vars.PATH_BASE_SERVICIO }}
-      TF_VAR_nombre_cluster_ecs: ${{ vars.NOMBRE_CLUSTER }}
-      TF_VAR_familia_tarea_ecs: ${{ vars.FAMILIA_TAREA_ECS }}
-      TF_VAR_nombre_repo_ecr: ${{ vars.NOMBRE_REPO_ECR || 'tienda-virtual' }}
-      TF_VAR_host_base_datos: ${{ vars.HOST_BASE_DATOS }}
-      TF_VAR_nombre_base_datos: ${{ vars.NOMBRE_BASE_DATOS }}
-      TF_VAR_usuario_base_datos: ${{ vars.USUARIO_BASE_DATOS }}
-      TF_VAR_contrasenha_base_datos: ${{ secrets.CONTRASENHA_BASE_DATOS }}
-      TF_VAR_nombre_servicio_ecs: ${{ vars.NOMBRE_SERVICIO }}
-      TF_VAR_nombre_load_balancer: ${{ vars.NOMBRE_LOAD_BALANCER || 'tienda-virtual-alb' }}
-      TF_VAR_nombre_target_group: ${{ vars.NOMBRE_TARGET_GROUP || 'tg-tienda-virtual' }}
-      TF_VAR_nombre_event_bus: ${{ vars.NOMBRE_EVENT_BUS || 'ordenes-bus' }}
-      TF_VAR_vpc_id: ${{ vars.VPC_ID }}
-      TF_VAR_public_subnet_ids: ${{ vars.PUBLIC_SUBNET_IDS_JSON || '[]' }}
-      TF_VAR_create_missing_public_subnet_for_alb: ${{ vars.CREATE_MISSING_PUBLIC_SUBNET_FOR_ALB || 'false' }}
-      TF_VAR_additional_public_subnet_cidr_block: ${{ vars.ADDITIONAL_PUBLIC_SUBNET_CIDR_BLOCK || '' }}
-      TF_VAR_additional_public_subnet_availability_zone: ${{ vars.ADDITIONAL_PUBLIC_SUBNET_AVAILABILITY_ZONE || '' }}
 
     steps:
       - name: Recuperar el código
@@ -60,7 +32,12 @@ jobs:
       - name: Preparar application.properties
         run: |
           cp src/main/resources/application.properties.example src/main/resources/application.properties
-        working-directory: backend
+        working-directory: backend-ventas
+
+      - name: Preparar application.properties (logistica)
+        run: |
+          cp src/main/resources/application.properties.example src/main/resources/application.properties
+        working-directory: backend-logistica
 
       - name: Configurar JDK 25
         uses: actions/setup-java@v5
@@ -69,34 +46,48 @@ jobs:
           java-version: '25'
           cache: maven
 
-      - name: Construir Spring Boot app
-        run: ./mvnw clean package -DskipTests
-        working-directory: backend
+      - name: Dar permisos de ejecución a mvnw
+        run: |
+          chmod +x backend-ventas/mvnw
+          chmod +x backend-logistica/mvnw
 
-      - name: Construir la imagen docker
-        run: docker build -t tienda-virtual .
-        working-directory: backend
+      - name: Construir Spring Boot app (ventas)
+        run: ./mvnw clean package -DskipTests
+        working-directory: backend-ventas
+
+      - name: Construir Spring Boot app (logistica)
+        run: ./mvnw clean package -DskipTests
+        working-directory: backend-logistica
+
+      - name: Construir imagen docker (ventas)
+        run: docker build -t tienda-virtual-ventas .
+        working-directory: backend-ventas
+
+      - name: Construir imagen docker (logistica)
+        run: docker build -t tienda-virtual-logistica .
+        working-directory: backend-logistica
 
       - name: Iniciar Sesión en ECR
         run: |
-          aws ecr get-login-password | docker login --username AWS --password-stdin "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+          aws ecr get-login-password | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
 
-      - name: Crear el repositorio ECR si no existe
+      - name: Crear repositorio ECR si no existe
         run: |
-          if aws ecr describe-repositories --repository-names "$NOMBRE_REPO_ECR" >/dev/null 2>&1; then
-            echo "El repositorio ECR ya existe: $NOMBRE_REPO_ECR"
-          else
-            aws ecr create-repository --repository-name "$NOMBRE_REPO_ECR"
-          fi
+          aws ecr describe-repositories --repository-names ${{ vars.NOMBRE_REPO_ECR || 'tiendavirtual' }} || aws ecr create-repository --repository-name ${{ vars.NOMBRE_REPO_ECR || 'tiendavirtual' }}
 
-      - name: Push Docker image
+      - name: Push Docker images al repositorio compartido
         run: |
-          docker tag tienda-virtual "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${NOMBRE_REPO_ECR}:latest"
-          docker push "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${NOMBRE_REPO_ECR}:latest"
+          docker tag tienda-virtual-ventas ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${{ vars.NOMBRE_REPO_ECR || 'tiendavirtual' }}:ventas-latest
+          docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${{ vars.NOMBRE_REPO_ECR || 'tiendavirtual' }}:ventas-latest
+          docker tag tienda-virtual-logistica ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${{ vars.NOMBRE_REPO_ECR || 'tiendavirtual' }}:logistica-latest
+          docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${{ vars.NOMBRE_REPO_ECR || 'tiendavirtual' }}:logistica-latest
 
       - name: Build Lambda Functions
         run: |
           cd serverless/tiendavirtual/packages/funciones/crear-orden
+          npm ci
+          npm run build
+          cd ../merger
           npm ci
           npm run build
 
@@ -105,36 +96,28 @@ jobs:
         with:
           terraform_version: 1.10.5
 
+      - name: Instalar cliente MySQL para inicialización RDS
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mysql-client
+
       - name: Inicializar Terraform
-        run: |
-          test -n "$BUCKET"
-          test -n "$LOCKS"
-          test -n "$TF_STATE_KEY"
-          test -n "$BACKEND_REGION"
-          terraform init \
-            -backend-config="bucket=${BUCKET}" \
-            -backend-config="dynamodb_table=${LOCKS}" \
-            -backend-config="key=${TF_STATE_KEY}" \
-            -backend-config="region=${BACKEND_REGION}"
-        working-directory: iac
-
-      - name: Validar Terraform
-        run: terraform validate
-        working-directory: iac
-
-      - name: Validar formato de subnets
-        run: |
-          echo "$PUBLIC_SUBNET_IDS_JSON" | jq -e 'type == "array" and all(.[]; type == "string")' >/dev/null
-          echo "PUBLIC_SUBNET_IDS_JSON contiene $(echo "$PUBLIC_SUBNET_IDS_JSON" | jq 'length') subnets."
-
-      - name: Planificar Terraform
-        run: terraform plan
+        run: terraform init -backend-config "bucket=${{ vars.BUCKET }}" -backend-config "dynamodb_table=${{ vars.LOCKS }}"
         working-directory: iac
 
       - name: Aplicar Terraform
-        run: terraform apply -auto-approve
+        run: |
+          terraform apply \
+            -var="id_cuenta_aws=${{ vars.AWS_ACCOUNT_ID }}" \
+            -var="nombre_rol_iam=${{ vars.NOMBRE_ROL_IAM }}" \
+            -var="path_base_servicio=${{ vars.PATH_BASE_SERVICIO || 'api' }}" \
+            -var="nombre_repo_ecr=${{ vars.NOMBRE_REPO_ECR || 'tiendavirtual' }}" \
+            -var="usuario_base_datos=${{ vars.USUARIO_BASE_DATOS || 'admin' }}" \
+            -var="contrasenha_base_datos=${{ secrets.CONTRASENHA_BASE_DATOS }}" \
+            -auto-approve
         working-directory: iac
 
-      - name: Forzar nuevo despliegue ECS
+      - name: Forzar nuevo despliegue ECS (ventas y logistica)
         run: |
-          aws ecs update-service --cluster ${{ vars.NOMBRE_CLUSTER }} --service ${{ vars.NOMBRE_SERVICIO }} --force-new-deployment
+          aws ecs update-service --cluster tienda-virtual-cluster --service servicio-ventas --force-new-deployment
+          aws ecs update-service --cluster tienda-virtual-cluster --service servicio-logistica --force-new-deployment

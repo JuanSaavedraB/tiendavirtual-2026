@@ -1,21 +1,16 @@
-variable "project_name" {
-  type        = string
-  description = "Nombre base del proyecto para etiquetas"
-}
-
-variable "environment" {
-  type        = string
-  description = "Ambiente del despliegue para etiquetas"
-}
-
 variable "nombre_cluster" {
   type        = string
   description = "Nombre del clúster ECS donde se desplegará la tarea"
 }
 
-variable "familia_tarea" {
+variable "familia_tarea_ventas" {
   type        = string
-  description = "Nombre de la familia de tareas ECS"
+  description = "Nombre de la familia de tareas ECS de ventas"
+}
+
+variable "familia_tarea_logistica" {
+  type        = string
+  description = "Nombre de la familia de tareas ECS de logistica"
 }
 
 variable "rol_lab_arn" {
@@ -33,7 +28,17 @@ variable "region_aws" {
 
 variable "nombre_repo_ecr" {
   type        = string
-  description = "Nombre del repositorio ECR donde se almacenará la imagen del contenedor"
+  description = "Nombre del repositorio ECR compartido"
+}
+
+variable "tag_imagen_ventas" {
+  type        = string
+  description = "Tag de imagen para el microservicio de ventas"
+}
+
+variable "tag_imagen_logistica" {
+  type        = string
+  description = "Tag de imagen para el microservicio de logistica"
 }
 
 variable "host_base_datos" {
@@ -41,9 +46,14 @@ variable "host_base_datos" {
   description = "Host DNS de la base de datos para la aplicación"
 }
 
-variable "nombre_base_datos" {
+variable "nombre_base_datos_ventas" {
   type        = string
-  description = "Nombre de la base de datos para la aplicación"
+  description = "Nombre de esquema/base de datos para ventas"
+}
+
+variable "nombre_base_datos_logistica" {
+  type        = string
+  description = "Nombre de esquema/base de datos para logistica"
 }
 
 variable "usuario_base_datos" {
@@ -57,57 +67,27 @@ variable "contrasenha_base_datos" {
 
 }
 
-variable "nombre_servicio_ecs" {
+variable "nombre_servicio_ecs_ventas" {
   type        = string
-  description = "Nombre del servicio ECS donde se desplegará la tarea"
+  description = "Nombre del servicio ECS para ventas"
 }
 
-variable "nombre_load_balancer" {
+variable "nombre_servicio_ecs_logistica" {
   type        = string
-  description = "Nombre del Application Load Balancer"
+  description = "Nombre del servicio ECS para logistica"
 }
 
-variable "nombre_target_group" {
+variable "path_base_servicio" {
   type        = string
-  description = "Nombre del Target Group"
+  description = "Path base del API (ej. /api)"
 }
 
-variable "vpc_id" {
+variable "queue_url_sync_ventas" {
   type        = string
-  description = "ID de VPC existente. Si está vacío, se usa la VPC por defecto."
-  default     = ""
+  description = "URL de la cola SQS para eventos de ventas"
 }
 
-variable "public_subnet_ids" {
-  type        = list(string)
-  description = "Subnets públicas para ALB/ECS. Si está vacío, se usan las subnets de la VPC seleccionada."
-  default     = []
-
-  validation {
-    condition     = length(var.public_subnet_ids) == 0 || length(var.public_subnet_ids) >= 2
-    error_message = "public_subnet_ids debe estar vacío o contener al menos dos subnets públicas."
-  }
-}
-
-variable "create_missing_public_subnet_for_alb" {
-  type        = bool
-  description = "Crea una subnet pública adicional para el ALB cuando public_subnet_ids está vacío y la VPC seleccionada tiene menos de dos subnets."
-  default     = false
-}
-
-variable "additional_public_subnet_cidr_block" {
+variable "queue_url_sync_logistica" {
   type        = string
-  description = "CIDR de la subnet pública adicional para el ALB. Debe estar dentro del CIDR de la VPC y no solaparse con subnets existentes."
-  default     = ""
-
-  validation {
-    condition     = var.additional_public_subnet_cidr_block == "" || can(cidrhost(var.additional_public_subnet_cidr_block, 0))
-    error_message = "additional_public_subnet_cidr_block debe estar vacío o ser un CIDR válido, por ejemplo 172.31.32.0/20."
-  }
-}
-
-variable "additional_public_subnet_availability_zone" {
-  type        = string
-  description = "Availability Zone para la subnet pública adicional del ALB, por ejemplo us-east-1b."
-  default     = ""
+  description = "URL de la cola SQS para eventos de logistica"
 }
