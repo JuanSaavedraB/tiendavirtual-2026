@@ -1,0 +1,144 @@
+CREATE DATABASE IF NOT EXISTS ventas;
+CREATE DATABASE IF NOT EXISTS logistica;
+CREATE DATABASE IF NOT EXISTS tiendavirtual;
+
+USE logistica;
+
+DROP TABLE IF EXISTS PRODUCTO;
+
+CREATE TABLE PRODUCTO (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    codigo CHAR(10) NOT NULL,
+    nombre VARCHAR(80) NOT NULL,
+    descripcion VARCHAR(80) NOT NULL,
+    precio DECIMAL(10, 2) NOT NULL,
+    stock INT NOT NULL,
+    CONSTRAINT uk_producto_codigo UNIQUE (codigo)
+);
+
+USE ventas;
+
+DROP TABLE IF EXISTS ITEMORDEN;
+DROP TABLE IF EXISTS ITEMCARRITO;
+DROP TABLE IF EXISTS ORDEN;
+DROP TABLE IF EXISTS CARRITO;
+DROP TABLE IF EXISTS CLIENTE;
+
+CREATE TABLE CLIENTE (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    dni CHAR(8) NOT NULL,
+    nombre VARCHAR(80) NOT NULL,
+    apellidos VARCHAR(80) NOT NULL,
+    CONSTRAINT uk_cliente_dni UNIQUE (dni)
+);
+
+CREATE TABLE CARRITO (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    idCliente INT NOT NULL,
+    nombre VARCHAR(80) NOT NULL,
+    fecha DATE NOT NULL,
+    CONSTRAINT fk_carrito_cliente FOREIGN KEY (idCliente)
+        REFERENCES CLIENTE(id)
+);
+
+CREATE TABLE ORDEN (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    numero CHAR(10) NULL,
+    idCarrito INT NOT NULL,
+    fecha DATE NOT NULL,
+    subTotal DECIMAL(10, 2) NOT NULL,
+    igv DECIMAL(10, 2) NOT NULL,
+    total DECIMAL(10, 2) NOT NULL,
+    CONSTRAINT uk_orden_numero UNIQUE (numero),
+    CONSTRAINT fk_orden_carrito FOREIGN KEY (idCarrito)
+        REFERENCES CARRITO(id)
+);
+
+CREATE TABLE ITEMCARRITO (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    idCarrito INT NOT NULL,
+    codigoProducto CHAR(10) NOT NULL,
+    cantidad INT NOT NULL,
+    subTotal DECIMAL(10, 2) NOT NULL,
+    CONSTRAINT fk_itemcarrito_carrito FOREIGN KEY (idCarrito)
+        REFERENCES CARRITO(id)
+);
+
+CREATE TABLE ITEMORDEN (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    idOrden INT NOT NULL,
+    codigoProducto CHAR(10) NOT NULL,
+    cantidad INT NOT NULL,
+    subTotal DECIMAL(10, 2) NOT NULL,
+    CONSTRAINT fk_itemorden_orden FOREIGN KEY (idOrden)
+        REFERENCES ORDEN(id)
+);
+
+USE tiendavirtual;
+
+DROP TABLE IF EXISTS ITEMORDEN;
+DROP TABLE IF EXISTS ITEMCARRITO;
+DROP TABLE IF EXISTS ORDEN;
+DROP TABLE IF EXISTS CARRITO;
+DROP TABLE IF EXISTS PRODUCTO;
+DROP TABLE IF EXISTS CLIENTE;
+
+CREATE TABLE CLIENTE (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    dni CHAR(8) NOT NULL,
+    nombre VARCHAR(80) NOT NULL,
+    apellidos VARCHAR(80) NOT NULL,
+    CONSTRAINT uk_sync_cliente_dni UNIQUE (dni)
+);
+
+CREATE TABLE PRODUCTO (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    codigo CHAR(10) NOT NULL,
+    nombre VARCHAR(80) NOT NULL,
+    descripcion VARCHAR(80) NOT NULL,
+    precio DECIMAL(10, 2) NOT NULL,
+    stock INT NOT NULL,
+    CONSTRAINT uk_sync_producto_codigo UNIQUE (codigo)
+);
+
+CREATE TABLE CARRITO (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    idCliente INT NOT NULL,
+    nombre VARCHAR(80) NOT NULL,
+    fecha DATE NOT NULL,
+    CONSTRAINT fk_sync_carrito_cliente FOREIGN KEY (idCliente)
+        REFERENCES CLIENTE(id)
+);
+
+CREATE TABLE ORDEN (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    numero CHAR(10) NULL,
+    idCarrito INT NOT NULL,
+    fecha DATE NOT NULL,
+    subTotal DECIMAL(10, 2) NOT NULL,
+    igv DECIMAL(10, 2) NOT NULL,
+    total DECIMAL(10, 2) NOT NULL,
+    CONSTRAINT uk_sync_orden_numero UNIQUE (numero),
+    CONSTRAINT fk_sync_orden_carrito FOREIGN KEY (idCarrito)
+        REFERENCES CARRITO(id)
+);
+
+CREATE TABLE ITEMCARRITO (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    idCarrito INT NOT NULL,
+    codigoProducto CHAR(10) NOT NULL,
+    cantidad INT NOT NULL,
+    subTotal DECIMAL(10, 2) NOT NULL,
+    CONSTRAINT fk_sync_itemcarrito_carrito FOREIGN KEY (idCarrito)
+        REFERENCES CARRITO(id)
+);
+
+CREATE TABLE ITEMORDEN (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    idOrden INT NOT NULL,
+    codigoProducto CHAR(10) NOT NULL,
+    cantidad INT NOT NULL,
+    subTotal DECIMAL(10, 2) NOT NULL,
+    CONSTRAINT fk_sync_itemorden_orden FOREIGN KEY (idOrden)
+        REFERENCES ORDEN(id)
+);

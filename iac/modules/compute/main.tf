@@ -1,14 +1,81 @@
+locals {
+  path_base_servicio_normalizado = length(trim(var.path_base_servicio, "/")) > 0 ? "/${trim(var.path_base_servicio, "/")}" : ""
+  productos_base_path            = "${local.path_base_servicio_normalizado}/productos"
+  logistica_productos_base_url   = "http://${aws_lb.tienda_virtual_load_balancer.dns_name}${local.productos_base_path}"
+}
+
 resource "aws_ecs_cluster" "cluster_tienda_virtual_servicios" {
   name = var.nombre_cluster
+}
 
-  tags = {
-    Project     = var.project_name
-    Environment = var.environment
+data "aws_vpc" "vpc_por_defecto" {
+  id = var.vpc_id
+}
+
+data "aws_security_group" "grupo_seguridad_por_defecto" {
+  name   = "default"
+  vpc_id = var.vpc_id
+}
+
+resource "aws_security_group" "alb_security_group" {
+  name        = "${var.nombre_cluster}-alb-sg"
+  description = "Permite trafico HTTP/HTTPS hacia el ALB"
+  vpc_id      = var.vpc_id
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 }
 
-resource "aws_ecs_task_definition" "definicion_tarea_tienda_virtual" {
-  family                   = var.familia_tarea
+resource "aws_security_group" "ecs_security_group" {
+  name        = "${var.nombre_cluster}-ecs-sg"
+  description = "Permite trafico del ALB a ECS en 8080"
+  vpc_id      = var.vpc_id
+
+  ingress {
+    from_port       = 8080
+    to_port         = 8080
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb_security_group.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+resource "aws_cloudwatch_log_group" "ecs_logs_ventas" {
+  name              = "/ecs/${var.nombre_servicio_ecs_ventas}"
+  retention_in_days = 7
+}
+
+resource "aws_cloudwatch_log_group" "ecs_logs_logistica" {
+  name              = "/ecs/${var.nombre_servicio_ecs_logistica}"
+  retention_in_days = 7
+}
+
+resource "aws_ecs_task_definition" "definicion_tarea_ventas" {
+  family                   = var.familia_tarea_ventas
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
   cpu                      = "1024"
@@ -17,8 +84,8 @@ resource "aws_ecs_task_definition" "definicion_tarea_tienda_virtual" {
   task_role_arn            = var.rol_lab_arn
 
   container_definitions = jsonencode([{
-    name      = "tienda-virtual",
-    image     = "${var.id_cuenta_aws}.dkr.ecr.${var.region_aws}.amazonaws.com/${var.nombre_repo_ecr}:latest",
+    name      = "tienda-virtual-ventas",
+    image     = "${var.id_cuenta_aws}.dkr.ecr.${var.region_aws}.amazonaws.com/${var.nombre_repo_ecr}:${var.tag_imagen_ventas}",
     essential = true,
     portMappings = [
       {
@@ -36,7 +103,7 @@ resource "aws_ecs_task_definition" "definicion_tarea_tienda_virtual" {
       },
       {
         name  = "DB_NAME"
-        value = var.nombre_base_datos
+        value = var.nombre_base_datos_ventas
       },
       {
         name  = "DB_USER"
@@ -45,12 +112,20 @@ resource "aws_ecs_task_definition" "definicion_tarea_tienda_virtual" {
       {
         name  = "DB_PASSWORD"
         value = var.contrasenha_base_datos
+      },
+      {
+        name  = "LOGISTICA_BASE_URL"
+        value = local.logistica_productos_base_url
+      },
+      {
+        name  = "SYNC_QUEUE_URL"
+        value = var.queue_url_sync_ventas
       }
     ],
     logConfiguration = {
       logDriver = "awslogs"
       options = {
-        awslogs-group         = "/ecs/${var.nombre_servicio_ecs}"
+        awslogs-group         = aws_cloudwatch_log_group.ecs_logs_ventas.name
         awslogs-region        = var.region_aws
         awslogs-stream-prefix = "ecs"
       }
@@ -58,185 +133,149 @@ resource "aws_ecs_task_definition" "definicion_tarea_tienda_virtual" {
   }])
 }
 
-resource "aws_cloudwatch_log_group" "ecs_logs" {
-  name              = "/ecs/${var.nombre_servicio_ecs}"
-  retention_in_days = 7
+resource "aws_ecs_task_definition" "definicion_tarea_logistica" {
+  family                   = var.familia_tarea_logistica
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu                      = "1024"
+  memory                   = "3072"
+  execution_role_arn       = var.rol_lab_arn
+  task_role_arn            = var.rol_lab_arn
 
-  tags = {
-    Project     = var.project_name
-    Environment = var.environment
-  }
-}
-
-data "aws_vpc" "vpc_por_defecto" {
-  count = var.vpc_id == "" ? 1 : 0
-
-  default = true
-}
-
-locals {
-  vpc_id_seleccionada           = var.vpc_id != "" ? var.vpc_id : data.aws_vpc.vpc_por_defecto[0].id
-  additional_public_subnet_name = "${var.project_name}-${var.environment}-alb-public-subnet-extra"
-}
-
-data "aws_subnets" "sub_redes_vpc_seleccionada" {
-  filter {
-    name   = "vpc-id"
-    values = [local.vpc_id_seleccionada]
-  }
-}
-
-data "aws_subnets" "subnet_publica_adicional_alb_existente" {
-  filter {
-    name   = "vpc-id"
-    values = [local.vpc_id_seleccionada]
-  }
-
-  filter {
-    name   = "tag:Name"
-    values = [local.additional_public_subnet_name]
-  }
-}
-
-data "aws_subnet" "sub_redes_descubiertas" {
-  for_each = toset(data.aws_subnets.sub_redes_vpc_seleccionada.ids)
-
-  id = each.value
-}
-
-locals {
-  discovered_public_subnet_ids = data.aws_subnets.sub_redes_vpc_seleccionada.ids
-  discovered_subnet_azs = distinct([
-    for subnet in data.aws_subnet.sub_redes_descubiertas : subnet.availability_zone
-  ])
-  discovered_subnet_cidr_blocks = [
-    for subnet in data.aws_subnet.sub_redes_descubiertas : subnet.cidr_block
-  ]
-  additional_public_subnet_already_exists = length(data.aws_subnets.subnet_publica_adicional_alb_existente.ids) > 0
-  create_additional_public_subnet_for_alb = (
-    length(var.public_subnet_ids) == 0 &&
-    var.create_missing_public_subnet_for_alb &&
-    (length(local.discovered_public_subnet_ids) < 2 || local.additional_public_subnet_already_exists)
-  )
-}
-
-data "aws_internet_gateway" "internet_gateway_vpc_seleccionada" {
-  count = local.create_additional_public_subnet_for_alb ? 1 : 0
-
-  filter {
-    name   = "attachment.vpc-id"
-    values = [local.vpc_id_seleccionada]
-  }
-}
-
-resource "aws_subnet" "subnet_publica_adicional_alb" {
-  count = local.create_additional_public_subnet_for_alb ? 1 : 0
-
-  vpc_id                  = local.vpc_id_seleccionada
-  cidr_block              = var.additional_public_subnet_cidr_block
-  availability_zone       = var.additional_public_subnet_availability_zone
-  map_public_ip_on_launch = true
-
-  tags = {
-    Name        = local.additional_public_subnet_name
-    Project     = var.project_name
-    Environment = var.environment
-    ManagedBy   = "terraform"
-  }
-
-  lifecycle {
-    precondition {
-      condition     = var.additional_public_subnet_cidr_block != ""
-      error_message = "additional_public_subnet_cidr_block es obligatorio cuando create_missing_public_subnet_for_alb=true y la VPC tiene menos de dos subnets."
+  container_definitions = jsonencode([{
+    name      = "tienda-virtual-logistica",
+    image     = "${var.id_cuenta_aws}.dkr.ecr.${var.region_aws}.amazonaws.com/${var.nombre_repo_ecr}:${var.tag_imagen_logistica}",
+    essential = true,
+    portMappings = [
+      {
+        containerPort = 8080,
+        protocol      = "tcp"
+      }
+    ],
+    cpu               = 1024,
+    memory            = 3072,
+    memoryReservation = 1024,
+    environment = [
+      {
+        name  = "DB_HOST"
+        value = var.host_base_datos
+      },
+      {
+        name  = "DB_NAME"
+        value = var.nombre_base_datos_logistica
+      },
+      {
+        name  = "DB_USER"
+        value = var.usuario_base_datos
+      },
+      {
+        name  = "DB_PASSWORD"
+        value = var.contrasenha_base_datos
+      },
+      {
+        name  = "SYNC_QUEUE_URL"
+        value = var.queue_url_sync_logistica
+      }
+    ],
+    logConfiguration = {
+      logDriver = "awslogs"
+      options = {
+        awslogs-group         = aws_cloudwatch_log_group.ecs_logs_logistica.name
+        awslogs-region        = var.region_aws
+        awslogs-stream-prefix = "ecs"
+      }
     }
+  }])
+}
 
-    precondition {
-      condition     = var.additional_public_subnet_availability_zone != ""
-      error_message = "additional_public_subnet_availability_zone es obligatorio cuando create_missing_public_subnet_for_alb=true y la VPC tiene menos de dos subnets."
-    }
+resource "aws_lb" "tienda_virtual_load_balancer" {
+  name               = "tienda-virtual-alb"
+  internal           = false
+  load_balancer_type = "application"
+  subnets            = var.subnet_ids
+  security_groups    = [aws_security_group.alb_security_group.id]
+}
 
-    precondition {
-      condition     = local.additional_public_subnet_already_exists || !contains(local.discovered_subnet_azs, var.additional_public_subnet_availability_zone)
-      error_message = "La subnet adicional debe crearse en una Availability Zone distinta a las subnets existentes."
-    }
+resource "aws_lb_target_group" "tg_ventas" {
+  name        = "tg-tienda-ventas"
+  port        = 8080
+  protocol    = "HTTP"
+  vpc_id      = var.vpc_id
+  target_type = "ip"
 
-    precondition {
-      condition     = local.additional_public_subnet_already_exists || !contains(local.discovered_subnet_cidr_blocks, var.additional_public_subnet_cidr_block)
-      error_message = "El CIDR de la subnet adicional ya existe en la VPC seleccionada."
+  health_check {
+    path                = "/"
+    interval            = 30
+    timeout             = 5
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+    matcher             = "200"
+  }
+}
+
+resource "aws_lb_target_group" "tg_logistica" {
+  name        = "tg-tienda-logistica"
+  port        = 8080
+  protocol    = "HTTP"
+  vpc_id      = var.vpc_id
+  target_type = "ip"
+
+  health_check {
+    path                = "/"
+    interval            = 30
+    timeout             = 5
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+    matcher             = "200"
+  }
+}
+
+resource "aws_lb_listener" "http_listener" {
+  load_balancer_arn = aws_lb.tienda_virtual_load_balancer.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.tg_ventas.arn
+  }
+}
+
+resource "aws_lb_listener_rule" "rule_logistica_productos" {
+  listener_arn = aws_lb_listener.http_listener.arn
+  priority     = 10
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.tg_logistica.arn
+  }
+
+  condition {
+    path_pattern {
+      values = [
+        local.productos_base_path,
+        "${local.productos_base_path}/*"
+      ]
     }
   }
 }
 
-resource "aws_route_table" "tabla_rutas_subnet_publica_adicional_alb" {
-  count = local.create_additional_public_subnet_for_alb ? 1 : 0
-
-  vpc_id = local.vpc_id_seleccionada
-
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = data.aws_internet_gateway.internet_gateway_vpc_seleccionada[0].id
-  }
-
-  tags = {
-    Name        = "${var.project_name}-${var.environment}-alb-public-rt-extra"
-    Project     = var.project_name
-    Environment = var.environment
-    ManagedBy   = "terraform"
-  }
-}
-
-resource "aws_route_table_association" "asociacion_subnet_publica_adicional_alb" {
-  count = local.create_additional_public_subnet_for_alb ? 1 : 0
-
-  subnet_id      = aws_subnet.subnet_publica_adicional_alb[0].id
-  route_table_id = aws_route_table.tabla_rutas_subnet_publica_adicional_alb[0].id
-}
-
-locals {
-  existing_subnet_ids_for_alb = length(var.public_subnet_ids) > 0 ? var.public_subnet_ids : local.discovered_public_subnet_ids
-}
-
-data "aws_subnet" "sub_redes_alb" {
-  for_each = toset(local.existing_subnet_ids_for_alb)
-
-  id = each.value
-}
-
-locals {
-  existing_alb_availability_zones = distinct([
-    for subnet in data.aws_subnet.sub_redes_alb : subnet.availability_zone
-  ])
-  subnet_ids_alb = distinct(concat(
-    local.existing_subnet_ids_for_alb,
-    aws_subnet.subnet_publica_adicional_alb[*].id
-  ))
-  alb_availability_zones = distinct(concat(
-    local.existing_alb_availability_zones,
-    local.create_additional_public_subnet_for_alb ? [var.additional_public_subnet_availability_zone] : []
-  ))
-}
-
-data "aws_security_group" "grupo_seguridad_por_defecto" {
-  name   = "default"
-  vpc_id = local.vpc_id_seleccionada
-}
-
-resource "aws_ecs_service" "servicio_tienda_virtual" {
-  name            = var.nombre_servicio_ecs
+resource "aws_ecs_service" "servicio_ventas" {
+  name            = var.nombre_servicio_ecs_ventas
   cluster         = aws_ecs_cluster.cluster_tienda_virtual_servicios.id
-  task_definition = aws_ecs_task_definition.definicion_tarea_tienda_virtual.arn
+  task_definition = aws_ecs_task_definition.definicion_tarea_ventas.arn
   desired_count   = 1
   launch_type     = "FARGATE"
 
   load_balancer {
-    target_group_arn = aws_lb_target_group.tg_tienda_virtual.arn
-    container_name   = "tienda-virtual"
+    target_group_arn = aws_lb_target_group.tg_ventas.arn
+    container_name   = "tienda-virtual-ventas"
     container_port   = 8080
   }
 
   network_configuration {
-    subnets          = local.subnet_ids_alb
-    security_groups  = [data.aws_security_group.grupo_seguridad_por_defecto.id]
+    subnets          = var.subnet_ids
+    security_groups  = [aws_security_group.ecs_security_group.id, data.aws_security_group.grupo_seguridad_por_defecto.id]
     assign_public_ip = true
   }
 
@@ -245,24 +284,61 @@ resource "aws_ecs_service" "servicio_tienda_virtual" {
   }
 
   depends_on = [
-    aws_ecs_task_definition.definicion_tarea_tienda_virtual,
-    aws_lb_listener.http_listener
+    aws_lb_listener.http_listener,
+    aws_lb_listener_rule.rule_logistica_productos
   ]
 }
 
-resource "aws_appautoscaling_target" "obetivo_escalamiento_ecs" {
+resource "aws_ecs_service" "servicio_logistica" {
+  name            = var.nombre_servicio_ecs_logistica
+  cluster         = aws_ecs_cluster.cluster_tienda_virtual_servicios.id
+  task_definition = aws_ecs_task_definition.definicion_tarea_logistica.arn
+  desired_count   = 1
+  launch_type     = "FARGATE"
+
+  load_balancer {
+    target_group_arn = aws_lb_target_group.tg_logistica.arn
+    container_name   = "tienda-virtual-logistica"
+    container_port   = 8080
+  }
+
+  network_configuration {
+    subnets          = var.subnet_ids
+    security_groups  = [aws_security_group.ecs_security_group.id, data.aws_security_group.grupo_seguridad_por_defecto.id]
+    assign_public_ip = true
+  }
+
+  deployment_controller {
+    type = "ECS"
+  }
+
+  depends_on = [
+    aws_lb_listener.http_listener,
+    aws_lb_listener_rule.rule_logistica_productos
+  ]
+}
+
+resource "aws_appautoscaling_target" "objetivo_escalamiento_ventas" {
   service_namespace  = "ecs"
-  resource_id        = "service/${aws_ecs_cluster.cluster_tienda_virtual_servicios.name}/${aws_ecs_service.servicio_tienda_virtual.name}"
+  resource_id        = "service/${aws_ecs_cluster.cluster_tienda_virtual_servicios.name}/${aws_ecs_service.servicio_ventas.name}"
   scalable_dimension = "ecs:service:DesiredCount"
   min_capacity       = 1
   max_capacity       = 4
 }
 
-resource "aws_appautoscaling_policy" "politica_de_autoescalamiento_ecs" {
-  name               = "cpu-utilization-scaling"
+resource "aws_appautoscaling_target" "objetivo_escalamiento_logistica" {
   service_namespace  = "ecs"
-  resource_id        = aws_appautoscaling_target.obetivo_escalamiento_ecs.resource_id
-  scalable_dimension = aws_appautoscaling_target.obetivo_escalamiento_ecs.scalable_dimension
+  resource_id        = "service/${aws_ecs_cluster.cluster_tienda_virtual_servicios.name}/${aws_ecs_service.servicio_logistica.name}"
+  scalable_dimension = "ecs:service:DesiredCount"
+  min_capacity       = 1
+  max_capacity       = 4
+}
+
+resource "aws_appautoscaling_policy" "politica_autoescalamiento_ventas" {
+  name               = "cpu-utilization-scaling-ventas"
+  service_namespace  = "ecs"
+  resource_id        = aws_appautoscaling_target.objetivo_escalamiento_ventas.resource_id
+  scalable_dimension = aws_appautoscaling_target.objetivo_escalamiento_ventas.scalable_dimension
   policy_type        = "TargetTrackingScaling"
 
   target_tracking_scaling_policy_configuration {
@@ -276,67 +352,20 @@ resource "aws_appautoscaling_policy" "politica_de_autoescalamiento_ecs" {
   }
 }
 
-resource "aws_lb" "tienda_virtual_load_balancer" {
-  name               = var.nombre_load_balancer
-  internal           = false
-  load_balancer_type = "application"
-  subnets            = local.subnet_ids_alb
-  security_groups    = [data.aws_security_group.grupo_seguridad_por_defecto.id]
+resource "aws_appautoscaling_policy" "politica_autoescalamiento_logistica" {
+  name               = "cpu-utilization-scaling-logistica"
+  service_namespace  = "ecs"
+  resource_id        = aws_appautoscaling_target.objetivo_escalamiento_logistica.resource_id
+  scalable_dimension = aws_appautoscaling_target.objetivo_escalamiento_logistica.scalable_dimension
+  policy_type        = "TargetTrackingScaling"
 
-  tags = {
-    Project     = var.project_name
-    Environment = var.environment
-  }
-
-  lifecycle {
-    precondition {
-      condition     = length(local.subnet_ids_alb) >= 2
-      error_message = "El ALB requiere al menos dos subnets públicas. Define public_subnet_ids con dos o más subnets."
+  target_tracking_scaling_policy_configuration {
+    target_value = 75.0
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageCPUUtilization"
     }
 
-    precondition {
-      condition     = length(local.alb_availability_zones) >= 2
-      error_message = "El ALB requiere subnets en al menos dos Availability Zones distintas."
-    }
-
-    precondition {
-      condition = alltrue([
-        for subnet in data.aws_subnet.sub_redes_alb : subnet.vpc_id == local.vpc_id_seleccionada
-      ])
-      error_message = "Todas las subnets del ALB deben pertenecer a la VPC seleccionada."
-    }
-  }
-}
-
-resource "aws_lb_target_group" "tg_tienda_virtual" {
-  name        = var.nombre_target_group
-  port        = 8080
-  protocol    = "HTTP"
-  vpc_id      = local.vpc_id_seleccionada
-  target_type = "ip"
-
-  health_check {
-    path                = "/"
-    interval            = 30
-    timeout             = 5
-    healthy_threshold   = 2
-    unhealthy_threshold = 2
-    matcher             = "200"
-  }
-
-  tags = {
-    Project     = var.project_name
-    Environment = var.environment
-  }
-}
-
-resource "aws_lb_listener" "http_listener" {
-  load_balancer_arn = aws_lb.tienda_virtual_load_balancer.arn
-  port              = 80
-  protocol          = "HTTP"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.tg_tienda_virtual.arn
+    scale_in_cooldown  = 60
+    scale_out_cooldown = 60
   }
 }
