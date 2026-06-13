@@ -14,6 +14,12 @@ jobs:
       AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
       AWS_REGION: ${{ vars.AWS_REGION }}
       AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      CREATE_MISSING_PUBLIC_SUBNET_FOR_LAB: ${{ vars.CREATE_MISSING_PUBLIC_SUBNET_FOR_LAB || 'false' }}
+      ADDITIONAL_PUBLIC_SUBNET_CIDR_BLOCK: ${{ vars.ADDITIONAL_PUBLIC_SUBNET_CIDR_BLOCK || '172.31.32.0/20' }}
+      ADDITIONAL_PUBLIC_SUBNET_AVAILABILITY_ZONE: ${{ vars.ADDITIONAL_PUBLIC_SUBNET_AVAILABILITY_ZONE || 'us-east-1b' }}
+      TF_VAR_create_missing_public_subnet_for_lab: ${{ vars.CREATE_MISSING_PUBLIC_SUBNET_FOR_LAB || 'false' }}
+      TF_VAR_additional_public_subnet_cidr_block: ${{ vars.ADDITIONAL_PUBLIC_SUBNET_CIDR_BLOCK || '172.31.32.0/20' }}
+      TF_VAR_additional_public_subnet_availability_zone: ${{ vars.ADDITIONAL_PUBLIC_SUBNET_AVAILABILITY_ZONE || 'us-east-1b' }}
 
     steps:
       - name: Recuperar el código

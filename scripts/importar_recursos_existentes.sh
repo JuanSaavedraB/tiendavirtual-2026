@@ -14,7 +14,7 @@ export TF_VAR_additional_public_subnet_cidr_block="${TF_VAR_additional_public_su
 export TF_VAR_additional_public_subnet_availability_zone="${TF_VAR_additional_public_subnet_availability_zone:-${ADDITIONAL_PUBLIC_SUBNET_AVAILABILITY_ZONE:-us-east-1b}}"
 
 state_has() {
-  terraform state list 2>/dev/null | grep -Fxq "$1"
+  terraform state show "$1" >/dev/null 2>&1
 }
 
 tf_import_if_missing() {
@@ -32,7 +32,19 @@ tf_import_if_missing() {
   fi
 
   echo "IMPORT ${address} <- ${import_id}"
-  terraform import "${address}" "${import_id}"
+  local import_output
+  if import_output="$(terraform import -input=false "${address}" "${import_id}" 2>&1)"; then
+    printf '%s\n' "${import_output}"
+    return 0
+  fi
+
+  if printf '%s\n' "${import_output}" | grep -q "Resource already managed by Terraform"; then
+    echo "OK   ${address}: Terraform ya lo gestiona; se omite import"
+    return 0
+  fi
+
+  printf '%s\n' "${import_output}" >&2
+  return 1
 }
 
 aws_text() {

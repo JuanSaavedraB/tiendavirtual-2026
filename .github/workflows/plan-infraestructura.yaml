@@ -16,6 +16,9 @@ jobs:
       CREATE_MISSING_PUBLIC_SUBNET_FOR_LAB: ${{ vars.CREATE_MISSING_PUBLIC_SUBNET_FOR_LAB || 'false' }}
       ADDITIONAL_PUBLIC_SUBNET_CIDR_BLOCK: ${{ vars.ADDITIONAL_PUBLIC_SUBNET_CIDR_BLOCK || '172.31.32.0/20' }}
       ADDITIONAL_PUBLIC_SUBNET_AVAILABILITY_ZONE: ${{ vars.ADDITIONAL_PUBLIC_SUBNET_AVAILABILITY_ZONE || 'us-east-1b' }}
+      TF_VAR_create_missing_public_subnet_for_lab: ${{ vars.CREATE_MISSING_PUBLIC_SUBNET_FOR_LAB || 'false' }}
+      TF_VAR_additional_public_subnet_cidr_block: ${{ vars.ADDITIONAL_PUBLIC_SUBNET_CIDR_BLOCK || '172.31.32.0/20' }}
+      TF_VAR_additional_public_subnet_availability_zone: ${{ vars.ADDITIONAL_PUBLIC_SUBNET_AVAILABILITY_ZONE || 'us-east-1b' }}
 
     steps:
       - name: Recuperar el codigo
@@ -64,8 +67,5 @@ jobs:
             -var="path_base_servicio=${{ vars.PATH_BASE_SERVICIO || 'api' }}" \
             -var="nombre_repo_ecr=${{ vars.NOMBRE_REPO_ECR || 'tiendavirtual' }}" \
             -var="usuario_base_datos=${{ vars.USUARIO_BASE_DATOS || 'admin' }}" \
-            -var="contrasenha_base_datos=${{ secrets.CONTRASENHA_BASE_DATOS }}" \
-            -var="create_missing_public_subnet_for_lab=${CREATE_MISSING_PUBLIC_SUBNET_FOR_LAB}" \
-            -var="additional_public_subnet_cidr_block=${ADDITIONAL_PUBLIC_SUBNET_CIDR_BLOCK}" \
-            -var="additional_public_subnet_availability_zone=${ADDITIONAL_PUBLIC_SUBNET_AVAILABILITY_ZONE}"
+            -var="contrasenha_base_datos=${{ secrets.CONTRASENHA_BASE_DATOS }}"
         working-directory: iac

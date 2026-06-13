@@ -15,7 +15,7 @@ locals {
 
 module "networking" {
   source                                     = "./modules/networking"
-  create_missing_public_subnet_for_lab       = coalesce(var.create_missing_public_subnet_for_alb, var.create_missing_public_subnet_for_lab)
+  create_missing_public_subnet_for_lab       = var.create_missing_public_subnet_for_lab || coalesce(var.create_missing_public_subnet_for_alb, false)
   additional_public_subnet_cidr_block        = var.additional_public_subnet_cidr_block
   additional_public_subnet_availability_zone = var.additional_public_subnet_availability_zone
 }

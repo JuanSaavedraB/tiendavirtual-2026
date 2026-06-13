@@ -60,6 +60,14 @@ Para AWS Learner Lab configurar estas variables de GitHub Actions cuando la VPC 
 - `ADDITIONAL_PUBLIC_SUBNET_CIDR_BLOCK=172.31.32.0/20`
 - `ADDITIONAL_PUBLIC_SUBNET_AVAILABILITY_ZONE=us-east-1b`
 
+Los workflows convierten esas variables a:
+
+- `TF_VAR_create_missing_public_subnet_for_lab`
+- `TF_VAR_additional_public_subnet_cidr_block`
+- `TF_VAR_additional_public_subnet_availability_zone`
+
+No usar variables antiguas como `CREATE_MISSING_PUBLIC_SUBNET_FOR_ALB` en GitHub Actions. Terraform conserva `create_missing_public_subnet_for_alb` solo para compatibilidad local; la variable vigente es `create_missing_public_subnet_for_lab`.
+
 Antes de aplicar, ejecutar el workflow **Diagnosticar e Importar Infraestructura AWS**. Ese workflow muestra la VPC, CIDR, subnets existentes, AZs cubiertas, subnets que usaran ALB/RDS y posibles conflictos de CIDR. Tambien importa recursos que pudieron quedar creados por un apply fallido.
 
 Luego ejecutar **Plan Terraform Infraestructura AWS** y revisar que:
