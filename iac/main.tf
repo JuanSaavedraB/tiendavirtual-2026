@@ -13,8 +13,18 @@ locals {
   url_base_servicio              = "http://${module.compute.load_balancer_url}${local.path_base_servicio_normalizado}"
 }
 
+module "networking" {
+  source                                     = "./modules/networking"
+  create_missing_public_subnet_for_lab       = coalesce(var.create_missing_public_subnet_for_alb, var.create_missing_public_subnet_for_lab)
+  additional_public_subnet_cidr_block        = var.additional_public_subnet_cidr_block
+  additional_public_subnet_availability_zone = var.additional_public_subnet_availability_zone
+}
+
 module "database" {
   source                    = "./modules/database"
+  vpc_id                    = module.networking.vpc_id
+  subnet_ids                = module.networking.public_subnet_ids
+  subnet_availability_zones = module.networking.public_subnet_availability_zones
   nombre_instancia_rds      = var.nombre_instancia_rds
   usuario_base_datos        = var.usuario_base_datos
   contrasenha_base_datos    = var.contrasenha_base_datos
@@ -43,6 +53,9 @@ module "serverless" {
 
 module "compute" {
   source                        = "./modules/compute"
+  vpc_id                        = module.networking.vpc_id
+  subnet_ids                    = module.networking.public_subnet_ids
+  subnet_availability_zones     = module.networking.public_subnet_availability_zones
   nombre_cluster                = var.nombre_cluster_ecs
   familia_tarea_ventas          = var.familia_tarea_ecs_ventas
   familia_tarea_logistica       = var.familia_tarea_ecs_logistica

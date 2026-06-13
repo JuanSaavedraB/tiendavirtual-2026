@@ -14,3 +14,13 @@ output "load_balancer_url" {
   description = "URL pública del Load Balancer"
   value       = aws_lb.tienda_virtual_load_balancer.dns_name
 }
+
+output "alb_subnet_ids" {
+  description = "Subnets configuradas en el ALB"
+  value       = var.subnet_ids
+}
+
+output "alb_availability_zones" {
+  description = "AZs configuradas en el ALB"
+  value       = var.subnet_availability_zones
+}

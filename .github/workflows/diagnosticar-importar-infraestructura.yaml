@@ -1,0 +1,49 @@
+name: Diagnosticar e Importar Infraestructura AWS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diagnosticar-importar:
+    runs-on: ubuntu-latest
+    environment: main
+
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      NOMBRE_ROL_IAM: ${{ vars.NOMBRE_ROL_IAM }}
+      CREATE_MISSING_PUBLIC_SUBNET_FOR_LAB: ${{ vars.CREATE_MISSING_PUBLIC_SUBNET_FOR_LAB || 'false' }}
+      ADDITIONAL_PUBLIC_SUBNET_CIDR_BLOCK: ${{ vars.ADDITIONAL_PUBLIC_SUBNET_CIDR_BLOCK || '172.31.32.0/20' }}
+      ADDITIONAL_PUBLIC_SUBNET_AVAILABILITY_ZONE: ${{ vars.ADDITIONAL_PUBLIC_SUBNET_AVAILABILITY_ZONE || 'us-east-1b' }}
+
+    steps:
+      - name: Recuperar el codigo
+        uses: actions/checkout@v5
+
+      - name: Configurar credenciales AWS
+        run: |
+          aws configure set aws_access_key_id "$AWS_ACCESS_KEY_ID"
+          aws configure set aws_secret_access_key "$AWS_SECRET_ACCESS_KEY"
+          aws configure set aws_session_token "$AWS_SESSION_TOKEN"
+          aws configure set region "$AWS_REGION"
+
+      - name: Verificar credenciales
+        run: aws sts get-caller-identity
+
+      - name: Instalar Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.10.5
+
+      - name: Diagnosticar red AWS
+        run: bash scripts/diagnostico_aws.sh
+
+      - name: Inicializar Terraform
+        run: terraform init -backend-config "bucket=${{ vars.BUCKET }}" -backend-config "dynamodb_table=${{ vars.LOCKS }}"
+        working-directory: iac
+
+      - name: Importar recursos existentes creados antes del fallo
+        run: bash scripts/importar_recursos_existentes.sh

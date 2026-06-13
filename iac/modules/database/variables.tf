@@ -1,3 +1,23 @@
+variable "vpc_id" {
+  description = "ID de la VPC donde se despliega RDS"
+  type        = string
+}
+
+variable "subnet_ids" {
+  description = "Subnets compartidas para el DB subnet group de RDS, en al menos dos AZs"
+  type        = list(string)
+}
+
+variable "subnet_availability_zones" {
+  description = "Availability Zones cubiertas por subnet_ids"
+  type        = list(string)
+
+  validation {
+    condition     = length(distinct(var.subnet_availability_zones)) >= 2
+    error_message = "database requiere subnets en al menos dos AZs distintas."
+  }
+}
+
 variable "nombre_instancia_rds" {
   description = "Identificador de la instancia RDS"
   type        = string

@@ -14,6 +14,10 @@ jobs:
       AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
       AWS_REGION: ${{ vars.AWS_REGION }}
       AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      NOMBRE_ROL_IAM: ${{ vars.NOMBRE_ROL_IAM }}
+      CREATE_MISSING_PUBLIC_SUBNET_FOR_LAB: ${{ vars.CREATE_MISSING_PUBLIC_SUBNET_FOR_LAB || 'false' }}
+      ADDITIONAL_PUBLIC_SUBNET_CIDR_BLOCK: ${{ vars.ADDITIONAL_PUBLIC_SUBNET_CIDR_BLOCK || '172.31.32.0/20' }}
+      ADDITIONAL_PUBLIC_SUBNET_AVAILABILITY_ZONE: ${{ vars.ADDITIONAL_PUBLIC_SUBNET_AVAILABILITY_ZONE || 'us-east-1b' }}
 
     steps:
       - name: Recuperar el código
@@ -105,6 +109,12 @@ jobs:
         run: terraform init -backend-config "bucket=${{ vars.BUCKET }}" -backend-config "dynamodb_table=${{ vars.LOCKS }}"
         working-directory: iac
 
+      - name: Diagnosticar red AWS
+        run: bash scripts/diagnostico_aws.sh
+
+      - name: Importar recursos existentes creados antes del fallo
+        run: bash scripts/importar_recursos_existentes.sh
+
       - name: Aplicar Terraform
         run: |
           terraform apply \
@@ -114,6 +124,9 @@ jobs:
             -var="nombre_repo_ecr=${{ vars.NOMBRE_REPO_ECR || 'tiendavirtual' }}" \
             -var="usuario_base_datos=${{ vars.USUARIO_BASE_DATOS || 'admin' }}" \
             -var="contrasenha_base_datos=${{ secrets.CONTRASENHA_BASE_DATOS }}" \
+            -var="create_missing_public_subnet_for_lab=${CREATE_MISSING_PUBLIC_SUBNET_FOR_LAB}" \
+            -var="additional_public_subnet_cidr_block=${ADDITIONAL_PUBLIC_SUBNET_CIDR_BLOCK}" \
+            -var="additional_public_subnet_availability_zone=${ADDITIONAL_PUBLIC_SUBNET_AVAILABILITY_ZONE}" \
             -auto-approve
         working-directory: iac
 

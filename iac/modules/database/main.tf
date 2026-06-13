@@ -1,22 +1,15 @@
 data "aws_vpc" "vpc_por_defecto" {
-  default = true
-}
-
-data "aws_subnets" "sub_redes_por_defecto" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.vpc_por_defecto.id]
-  }
+  id = var.vpc_id
 }
 
 data "aws_security_group" "grupo_seguridad_por_defecto" {
   name   = "default"
-  vpc_id = data.aws_vpc.vpc_por_defecto.id
+  vpc_id = var.vpc_id
 }
 
 resource "aws_db_subnet_group" "rds_subnet_group" {
   name       = "${var.nombre_instancia_rds}-subnet-group"
-  subnet_ids = data.aws_subnets.sub_redes_por_defecto.ids
+  subnet_ids = var.subnet_ids
 }
 
 resource "aws_db_instance" "tienda_virtual_mysql" {

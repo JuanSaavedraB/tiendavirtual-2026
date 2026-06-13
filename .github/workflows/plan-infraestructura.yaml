@@ -1,0 +1,71 @@
+name: Plan Terraform Infraestructura AWS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    environment: main
+
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      CREATE_MISSING_PUBLIC_SUBNET_FOR_LAB: ${{ vars.CREATE_MISSING_PUBLIC_SUBNET_FOR_LAB || 'false' }}
+      ADDITIONAL_PUBLIC_SUBNET_CIDR_BLOCK: ${{ vars.ADDITIONAL_PUBLIC_SUBNET_CIDR_BLOCK || '172.31.32.0/20' }}
+      ADDITIONAL_PUBLIC_SUBNET_AVAILABILITY_ZONE: ${{ vars.ADDITIONAL_PUBLIC_SUBNET_AVAILABILITY_ZONE || 'us-east-1b' }}
+
+    steps:
+      - name: Recuperar el codigo
+        uses: actions/checkout@v5
+
+      - name: Configurar credenciales AWS
+        run: |
+          aws configure set aws_access_key_id "$AWS_ACCESS_KEY_ID"
+          aws configure set aws_secret_access_key "$AWS_SECRET_ACCESS_KEY"
+          aws configure set aws_session_token "$AWS_SESSION_TOKEN"
+          aws configure set region "$AWS_REGION"
+
+      - name: Verificar credenciales
+        run: aws sts get-caller-identity
+
+      - name: Build Lambda Functions
+        run: |
+          cd serverless/tiendavirtual/packages/funciones/crear-orden
+          npm ci
+          npm run build
+          cd ../merger
+          npm ci
+          npm run build
+
+      - name: Instalar Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.10.5
+
+      - name: Diagnosticar red AWS
+        run: bash scripts/diagnostico_aws.sh
+
+      - name: Inicializar Terraform
+        run: terraform init -backend-config "bucket=${{ vars.BUCKET }}" -backend-config "dynamodb_table=${{ vars.LOCKS }}"
+        working-directory: iac
+
+      - name: Validar Terraform
+        run: terraform validate
+        working-directory: iac
+
+      - name: Ejecutar terraform plan
+        run: |
+          terraform plan \
+            -var="id_cuenta_aws=${{ vars.AWS_ACCOUNT_ID }}" \
+            -var="nombre_rol_iam=${{ vars.NOMBRE_ROL_IAM }}" \
+            -var="path_base_servicio=${{ vars.PATH_BASE_SERVICIO || 'api' }}" \
+            -var="nombre_repo_ecr=${{ vars.NOMBRE_REPO_ECR || 'tiendavirtual' }}" \
+            -var="usuario_base_datos=${{ vars.USUARIO_BASE_DATOS || 'admin' }}" \
+            -var="contrasenha_base_datos=${{ secrets.CONTRASENHA_BASE_DATOS }}" \
+            -var="create_missing_public_subnet_for_lab=${CREATE_MISSING_PUBLIC_SUBNET_FOR_LAB}" \
+            -var="additional_public_subnet_cidr_block=${ADDITIONAL_PUBLIC_SUBNET_CIDR_BLOCK}" \
+            -var="additional_public_subnet_availability_zone=${ADDITIONAL_PUBLIC_SUBNET_AVAILABILITY_ZONE}"
+        working-directory: iac
