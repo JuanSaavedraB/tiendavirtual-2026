@@ -1,12 +1,12 @@
 data "archive_file" "archivo_crear_orden_lambda" {
   type        = "zip"
-  source_dir  = "${path.root}/../serverless/tiendavirtual/packages/funciones/crear-orden/build"
+  source_dir  = abspath("${path.root}/../serverless/tiendavirtual/packages/funciones/crear-orden/build")
   output_path = "${path.root}/data/crear_orden_lambda.zip"
 }
 
 data "archive_file" "archivo_merger_lambda" {
   type        = "zip"
-  source_dir  = "${path.root}/../serverless/tiendavirtual/packages/funciones/merger/build"
+  source_dir  = abspath("${path.root}/../serverless/tiendavirtual/packages/funciones/merger/build")
   output_path = "${path.root}/data/merger_lambda.zip"
 }
 

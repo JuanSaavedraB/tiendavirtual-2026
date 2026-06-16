@@ -36,6 +36,23 @@ jobs:
       - name: Verificar credenciales
         run: aws sts get-caller-identity
 
+      - name: Build Lambda Functions
+        run: |
+          pwd
+          ls -la serverless/tiendavirtual/packages/funciones/crear-orden
+          ls -la serverless/tiendavirtual/packages/funciones/merger
+
+          for fn in crear-orden merger; do
+            pushd "serverless/tiendavirtual/packages/funciones/${fn}"
+            npm ci
+            npm run build
+            test -d build
+            popd
+          done
+
+          test -d serverless/tiendavirtual/packages/funciones/crear-orden/build
+          test -d serverless/tiendavirtual/packages/funciones/merger/build
+
       - name: Instalar Terraform
         uses: hashicorp/setup-terraform@v4
         with:
