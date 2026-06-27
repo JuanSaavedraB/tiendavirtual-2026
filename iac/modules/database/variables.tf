@@ -1,23 +1,3 @@
-variable "vpc_id" {
-  description = "ID de la VPC donde se despliega RDS"
-  type        = string
-}
-
-variable "subnet_ids" {
-  description = "Subnets compartidas para el DB subnet group de RDS, en al menos dos AZs"
-  type        = list(string)
-}
-
-variable "subnet_availability_zones" {
-  description = "Availability Zones cubiertas por subnet_ids"
-  type        = list(string)
-
-  validation {
-    condition     = length(distinct(var.subnet_availability_zones)) >= 2
-    error_message = "database requiere subnets en al menos dos AZs distintas."
-  }
-}
-
 variable "nombre_instancia_rds" {
   description = "Identificador de la instancia RDS"
   type        = string
@@ -71,4 +51,24 @@ variable "rds_engine_version" {
 variable "rds_publicly_accessible" {
   description = "Define si la instancia RDS sera publica"
   type        = bool
+}
+
+variable "db_init_timeout_seconds" {
+  description = "Tiempo maximo total para esperar disponibilidad de RDS antes de fallar"
+  type        = number
+
+  validation {
+    condition     = var.db_init_timeout_seconds > 0
+    error_message = "db_init_timeout_seconds debe ser mayor a 0."
+  }
+}
+
+variable "db_init_retry_interval_seconds" {
+  description = "Intervalo entre reintentos de disponibilidad de RDS"
+  type        = number
+
+  validation {
+    condition     = var.db_init_retry_interval_seconds > 0
+    error_message = "db_init_retry_interval_seconds debe ser mayor a 0."
+  }
 }

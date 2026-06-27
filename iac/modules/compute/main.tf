@@ -9,18 +9,25 @@ resource "aws_ecs_cluster" "cluster_tienda_virtual_servicios" {
 }
 
 data "aws_vpc" "vpc_por_defecto" {
-  id = var.vpc_id
+  default = true
+}
+
+data "aws_subnets" "sub_redes_por_defecto" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.vpc_por_defecto.id]
+  }
 }
 
 data "aws_security_group" "grupo_seguridad_por_defecto" {
   name   = "default"
-  vpc_id = var.vpc_id
+  vpc_id = data.aws_vpc.vpc_por_defecto.id
 }
 
 resource "aws_security_group" "alb_security_group" {
   name        = "${var.nombre_cluster}-alb-sg"
   description = "Permite trafico HTTP/HTTPS hacia el ALB"
-  vpc_id      = var.vpc_id
+  vpc_id      = data.aws_vpc.vpc_por_defecto.id
 
   ingress {
     from_port   = 80
@@ -47,7 +54,7 @@ resource "aws_security_group" "alb_security_group" {
 resource "aws_security_group" "ecs_security_group" {
   name        = "${var.nombre_cluster}-ecs-sg"
   description = "Permite trafico del ALB a ECS en 8080"
-  vpc_id      = var.vpc_id
+  vpc_id      = data.aws_vpc.vpc_por_defecto.id
 
   ingress {
     from_port       = 8080
@@ -192,7 +199,7 @@ resource "aws_lb" "tienda_virtual_load_balancer" {
   name               = "tienda-virtual-alb"
   internal           = false
   load_balancer_type = "application"
-  subnets            = var.subnet_ids
+  subnets            = data.aws_subnets.sub_redes_por_defecto.ids
   security_groups    = [aws_security_group.alb_security_group.id]
 }
 
@@ -200,7 +207,7 @@ resource "aws_lb_target_group" "tg_ventas" {
   name        = "tg-tienda-ventas"
   port        = 8080
   protocol    = "HTTP"
-  vpc_id      = var.vpc_id
+  vpc_id      = data.aws_vpc.vpc_por_defecto.id
   target_type = "ip"
 
   health_check {
@@ -217,7 +224,7 @@ resource "aws_lb_target_group" "tg_logistica" {
   name        = "tg-tienda-logistica"
   port        = 8080
   protocol    = "HTTP"
-  vpc_id      = var.vpc_id
+  vpc_id      = data.aws_vpc.vpc_por_defecto.id
   target_type = "ip"
 
   health_check {
@@ -274,7 +281,7 @@ resource "aws_ecs_service" "servicio_ventas" {
   }
 
   network_configuration {
-    subnets          = var.subnet_ids
+    subnets          = data.aws_subnets.sub_redes_por_defecto.ids
     security_groups  = [aws_security_group.ecs_security_group.id, data.aws_security_group.grupo_seguridad_por_defecto.id]
     assign_public_ip = true
   }
@@ -303,7 +310,7 @@ resource "aws_ecs_service" "servicio_logistica" {
   }
 
   network_configuration {
-    subnets          = var.subnet_ids
+    subnets          = data.aws_subnets.sub_redes_por_defecto.ids
     security_groups  = [aws_security_group.ecs_security_group.id, data.aws_security_group.grupo_seguridad_por_defecto.id]
     assign_public_ip = true
   }

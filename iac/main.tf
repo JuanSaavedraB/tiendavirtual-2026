@@ -13,29 +13,21 @@ locals {
   url_base_servicio              = "http://${module.compute.load_balancer_url}${local.path_base_servicio_normalizado}"
 }
 
-module "networking" {
-  source                                     = "./modules/networking"
-  create_missing_public_subnet_for_lab       = var.create_missing_public_subnet_for_lab || coalesce(var.create_missing_public_subnet_for_alb, false)
-  additional_public_subnet_cidr_block        = var.additional_public_subnet_cidr_block
-  additional_public_subnet_availability_zone = var.additional_public_subnet_availability_zone
-}
-
 module "database" {
-  source                    = "./modules/database"
-  vpc_id                    = module.networking.vpc_id
-  subnet_ids                = module.networking.public_subnet_ids
-  subnet_availability_zones = module.networking.public_subnet_availability_zones
-  nombre_instancia_rds      = var.nombre_instancia_rds
-  usuario_base_datos        = var.usuario_base_datos
-  contrasenha_base_datos    = var.contrasenha_base_datos
-  nombre_base_datos_inicial = var.nombre_base_datos_inicial_rds
-  ddl_script_path           = "${path.root}/../backend-ventas/src/main/resources/sql/base-datos-ddl.sql"
-  dml_script_path           = "${path.root}/../backend-ventas/src/main/resources/sql/base-datos-dml.sql"
-  rds_instance_class        = var.rds_instance_class
-  rds_allocated_storage     = var.rds_allocated_storage
-  rds_max_allocated_storage = var.rds_max_allocated_storage
-  rds_engine_version        = var.rds_engine_version
-  rds_publicly_accessible   = var.rds_publicly_accessible
+  source                         = "./modules/database"
+  nombre_instancia_rds           = var.nombre_instancia_rds
+  usuario_base_datos             = var.usuario_base_datos
+  contrasenha_base_datos         = var.contrasenha_base_datos
+  nombre_base_datos_inicial      = var.nombre_base_datos_inicial_rds
+  ddl_script_path                = "${path.root}/../backend-ventas/src/main/resources/sql/base-datos-ddl.sql"
+  dml_script_path                = "${path.root}/../backend-ventas/src/main/resources/sql/base-datos-dml.sql"
+  rds_instance_class             = var.rds_instance_class
+  rds_allocated_storage          = var.rds_allocated_storage
+  rds_max_allocated_storage      = var.rds_max_allocated_storage
+  rds_engine_version             = var.rds_engine_version
+  rds_publicly_accessible        = var.rds_publicly_accessible
+  db_init_timeout_seconds        = var.db_init_timeout_seconds
+  db_init_retry_interval_seconds = var.db_init_retry_interval_seconds
 }
 
 module "serverless" {
@@ -53,9 +45,6 @@ module "serverless" {
 
 module "compute" {
   source                        = "./modules/compute"
-  vpc_id                        = module.networking.vpc_id
-  subnet_ids                    = module.networking.public_subnet_ids
-  subnet_availability_zones     = module.networking.public_subnet_availability_zones
   nombre_cluster                = var.nombre_cluster_ecs
   familia_tarea_ventas          = var.familia_tarea_ecs_ventas
   familia_tarea_logistica       = var.familia_tarea_ecs_logistica

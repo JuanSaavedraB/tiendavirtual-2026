@@ -3,12 +3,14 @@ package pe.edu.pucp.tiendavirtual.api;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 import pe.edu.pucp.tiendavirtual.modelo.Orden;
 import pe.edu.pucp.tiendavirtual.service.OrdenService;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
 import java.util.List;
 
 @RestController
@@ -23,10 +25,14 @@ public class OrdenController {
     }
 
     @GetMapping(params = "fecha")
-    public List<Orden> buscarPorFecha(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha
-    ) {
-        return ordenService.buscarPorFecha(fecha);
+    public ResponseEntity<?> buscarPorFecha(@RequestParam String fecha) {
+        LocalDate fechaParseada;
+        try {
+            fechaParseada = parsearFecha(fecha);
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(ex.getMessage());
+        }
+        return ResponseEntity.ok(ordenService.buscarPorFecha(fechaParseada));
     }
 
     @GetMapping("/{id}")
@@ -62,5 +68,23 @@ public class OrdenController {
             return ResponseEntity.notFound().build();
         }
         return ResponseEntity.noContent().build();
+    }
+
+    private LocalDate parsearFecha(String fecha) {
+        List<DateTimeFormatter> formatos = new ArrayList<>();
+        formatos.add(DateTimeFormatter.ISO_LOCAL_DATE);
+        formatos.add(DateTimeFormatter.ofPattern("M/d/uuuu"));
+        formatos.add(DateTimeFormatter.ofPattern("MM/dd/uuuu"));
+        formatos.add(DateTimeFormatter.ofPattern("d/M/uuuu"));
+        formatos.add(DateTimeFormatter.ofPattern("dd/MM/uuuu"));
+
+        for (DateTimeFormatter formato : formatos) {
+            try {
+                return LocalDate.parse(fecha, formato);
+            } catch (DateTimeParseException ignored) {
+            }
+        }
+
+        throw new IllegalArgumentException("Fecha invalida. Usa formato yyyy-MM-dd.");
     }
 }

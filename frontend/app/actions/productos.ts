@@ -1,0 +1,43 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import {
+  actualizarProducto,
+  agregarProducto,
+  eliminarProducto,
+} from "@/lib/api/productos";
+import { parseNumber, parseText } from "@/app/actions/helpers";
+
+export async function crearProductoAction(formData: FormData): Promise<void> {
+  const codigo = parseText(formData.get("codigo"), "codigo");
+  const nombre = parseText(formData.get("nombre"), "nombre");
+  const descripcion = parseText(formData.get("descripcion"), "descripcion");
+  const precio = parseNumber(formData.get("precio"), "precio");
+  const stock = parseNumber(formData.get("stock"), "stock");
+
+  await agregarProducto({ codigo, nombre, descripcion, precio, stock });
+  revalidatePath("/productos");
+  redirect("/productos");
+}
+
+export async function editarProductoAction(formData: FormData): Promise<void> {
+  const id = parseNumber(formData.get("id"), "id");
+  const codigo = parseText(formData.get("codigo"), "codigo");
+  const nombre = parseText(formData.get("nombre"), "nombre");
+  const descripcion = parseText(formData.get("descripcion"), "descripcion");
+  const precio = parseNumber(formData.get("precio"), "precio");
+  const stock = parseNumber(formData.get("stock"), "stock");
+
+  await actualizarProducto({ id, codigo, nombre, descripcion, precio, stock });
+  revalidatePath("/productos");
+  redirect("/productos");
+}
+
+export async function eliminarProductoAction(formData: FormData): Promise<void> {
+  const id = parseNumber(formData.get("id"), "id");
+  await eliminarProducto(id);
+  revalidatePath("/productos");
+  revalidatePath("/carrito");
+  redirect("/productos");
+}

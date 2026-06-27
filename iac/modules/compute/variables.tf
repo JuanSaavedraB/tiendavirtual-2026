@@ -1,23 +1,3 @@
-variable "vpc_id" {
-  type        = string
-  description = "ID de la VPC donde se despliega compute"
-}
-
-variable "subnet_ids" {
-  type        = list(string)
-  description = "Subnets compartidas para ALB y ECS, en al menos dos AZs"
-}
-
-variable "subnet_availability_zones" {
-  type        = list(string)
-  description = "Availability Zones cubiertas por subnet_ids"
-
-  validation {
-    condition     = length(distinct(var.subnet_availability_zones)) >= 2
-    error_message = "compute requiere subnets en al menos dos AZs distintas."
-  }
-}
-
 variable "nombre_cluster" {
   type        = string
   description = "Nombre del clúster ECS donde se desplegará la tarea"

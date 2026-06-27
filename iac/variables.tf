@@ -114,6 +114,18 @@ variable "rds_publicly_accessible" {
   default     = true
 }
 
+variable "db_init_timeout_seconds" {
+  description = "Tiempo maximo total para esperar disponibilidad de RDS antes de fallar"
+  type        = number
+  default     = 900
+}
+
+variable "db_init_retry_interval_seconds" {
+  description = "Intervalo entre reintentos de disponibilidad de RDS"
+  type        = number
+  default     = 15
+}
+
 variable "esquema_ventas" {
   description = "Nombre del esquema MySQL para ventas"
   type        = string
@@ -136,33 +148,4 @@ variable "nombre_base_datos_inicial_rds" {
   description = "Nombre de la base inicial creada por RDS"
   type        = string
   default     = "tiendavirtual"
-}
-
-variable "create_missing_public_subnet_for_lab" {
-  description = "Crea una subnet publica adicional si la VPC default del Learner Lab no cubre 2 AZs"
-  type        = bool
-  default     = false
-}
-
-variable "create_missing_public_subnet_for_alb" {
-  description = "DEPRECATED: use create_missing_public_subnet_for_lab. Se conserva temporalmente por compatibilidad."
-  type        = bool
-  default     = null
-}
-
-variable "additional_public_subnet_cidr_block" {
-  description = "CIDR de la subnet publica adicional para laboratorio; debe pertenecer a la VPC y no superponerse"
-  type        = string
-  default     = "172.31.32.0/20"
-
-  validation {
-    condition     = can(cidrhost(var.additional_public_subnet_cidr_block, 0))
-    error_message = "additional_public_subnet_cidr_block debe ser un CIDR valido."
-  }
-}
-
-variable "additional_public_subnet_availability_zone" {
-  description = "AZ para la subnet publica adicional de laboratorio"
-  type        = string
-  default     = "us-east-1b"
 }

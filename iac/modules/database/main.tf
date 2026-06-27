@@ -1,15 +1,22 @@
 data "aws_vpc" "vpc_por_defecto" {
-  id = var.vpc_id
+  default = true
+}
+
+data "aws_subnets" "sub_redes_por_defecto" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.vpc_por_defecto.id]
+  }
 }
 
 data "aws_security_group" "grupo_seguridad_por_defecto" {
   name   = "default"
-  vpc_id = var.vpc_id
+  vpc_id = data.aws_vpc.vpc_por_defecto.id
 }
 
 resource "aws_db_subnet_group" "rds_subnet_group" {
   name       = "${var.nombre_instancia_rds}-subnet-group"
-  subnet_ids = var.subnet_ids
+  subnet_ids = data.aws_subnets.sub_redes_por_defecto.ids
 }
 
 resource "aws_db_instance" "tienda_virtual_mysql" {
@@ -40,27 +47,48 @@ resource "null_resource" "inicializar_base_datos" {
 
   provisioner "local-exec" {
     environment = {
-      DB_HOST     = aws_db_instance.tienda_virtual_mysql.address
-      DB_PORT     = tostring(aws_db_instance.tienda_virtual_mysql.port)
-      DB_USER     = var.usuario_base_datos
-      DB_PASSWORD = var.contrasenha_base_datos
-      DDL_SCRIPT  = var.ddl_script_path
-      DML_SCRIPT  = var.dml_script_path
+      DB_HOST                        = aws_db_instance.tienda_virtual_mysql.address
+      DB_PORT                        = tostring(aws_db_instance.tienda_virtual_mysql.port)
+      DB_USER                        = var.usuario_base_datos
+      DB_PASSWORD                    = var.contrasenha_base_datos
+      DDL_SCRIPT                     = var.ddl_script_path
+      DML_SCRIPT                     = var.dml_script_path
+      DB_INIT_TIMEOUT_SECONDS        = tostring(var.db_init_timeout_seconds)
+      DB_INIT_RETRY_INTERVAL_SECONDS = tostring(var.db_init_retry_interval_seconds)
     }
     interpreter = ["/bin/bash", "-c"]
     command     = <<-EOT
       set -euo pipefail
 
-      for i in $(seq 1 40); do
-        if mysqladmin ping -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD" --silent; then
+      start_ts=$(date +%s)
+      timeout_seconds="$DB_INIT_TIMEOUT_SECONDS"
+      retry_interval_seconds="$DB_INIT_RETRY_INTERVAL_SECONDS"
+      deadline=$((start_ts + timeout_seconds))
+      intento=0
+
+      while true; do
+        intento=$((intento + 1))
+        now=$(date +%s)
+        elapsed=$((now - start_ts))
+
+        if mysqladmin ping -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD" --connect-timeout=5 --silent >/dev/null 2>&1 \
+          && mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD" --protocol=TCP --connect-timeout=5 -e "SELECT 1" >/dev/null 2>&1; then
+          echo "RDS disponible y conexión SQL validada."
           break
         fi
-        echo "Esperando disponibilidad de RDS..."
-        sleep 15
+
+        if [ "$now" -ge "$deadline" ]; then
+          echo "ERROR: RDS no estuvo disponible tras $${timeout_seconds}s (intentos: $${intento})."
+          exit 1
+        fi
+
+        restante=$((deadline - now))
+        echo "Esperando disponibilidad de RDS... intento $${intento}, transcurrido $${elapsed}s, restante $${restante}s."
+        sleep "$retry_interval_seconds"
       done
 
-      mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD" --protocol=TCP < "$DDL_SCRIPT"
-      mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD" --protocol=TCP < "$DML_SCRIPT"
+      mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD" --protocol=TCP --connect-timeout=10 < "$DDL_SCRIPT"
+      mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD" --protocol=TCP --connect-timeout=10 < "$DML_SCRIPT"
     EOT
   }
 
