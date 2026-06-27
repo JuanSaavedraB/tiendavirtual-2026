@@ -149,3 +149,33 @@ variable "nombre_base_datos_inicial_rds" {
   type        = string
   default     = "tiendavirtual"
 }
+
+variable "create_missing_public_subnet_for_lab" {
+  description = "Crea una subnet publica adicional si el Learner Lab solo tiene una AZ util."
+  type        = bool
+  default     = false
+}
+
+variable "create_missing_public_subnet_for_alb" {
+  description = "Variable antigua conservada por compatibilidad. No anula create_missing_public_subnet_for_lab=true."
+  type        = bool
+  default     = false
+}
+
+variable "additional_public_subnet_cidr_block" {
+  description = "CIDR para la subnet publica adicional del Learner Lab."
+  type        = string
+  default     = "172.31.32.0/20"
+}
+
+variable "additional_public_subnet_availability_zone" {
+  description = "AZ para la subnet publica adicional del Learner Lab."
+  type        = string
+  default     = "us-east-1b"
+}
+
+variable "frontend_url" {
+  description = "URL publica del frontend si se despliega fuera de Terraform."
+  type        = string
+  default     = null
+}

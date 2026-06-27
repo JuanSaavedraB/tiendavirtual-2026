@@ -14,6 +14,9 @@ jobs:
       AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
       AWS_REGION: ${{ vars.AWS_REGION }}
       AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      TF_VAR_create_missing_public_subnet_for_lab: ${{ vars.CREATE_MISSING_PUBLIC_SUBNET_FOR_LAB || 'true' }}
+      TF_VAR_additional_public_subnet_cidr_block: ${{ vars.ADDITIONAL_PUBLIC_SUBNET_CIDR_BLOCK || '172.31.32.0/20' }}
+      TF_VAR_additional_public_subnet_availability_zone: ${{ vars.ADDITIONAL_PUBLIC_SUBNET_AVAILABILITY_ZONE || 'us-east-1b' }}
 
     steps:
       - name: Recuperar el código
@@ -105,6 +108,16 @@ jobs:
         run: terraform init -backend-config "bucket=${{ vars.BUCKET }}" -backend-config "dynamodb_table=${{ vars.LOCKS }}"
         working-directory: iac
 
+      - name: Diagnosticar networking AWS
+        run: bash ../scripts/diagnostico_aws.sh
+        working-directory: iac
+
+      - name: Importar recursos existentes si aplica
+        run: bash ../scripts/importar_recursos_existentes.sh
+        working-directory: iac
+        env:
+          PATH_BASE_SERVICIO: ${{ vars.PATH_BASE_SERVICIO || 'api' }}
+
       - name: Aplicar Terraform
         run: |
           terraform apply \
@@ -123,7 +136,7 @@ jobs:
           aws ecs update-service --cluster tienda-virtual-cluster --service servicio-logistica --force-new-deployment
 
       - name: Instalar dependencias Frontend
-        run: npm install
+        run: npm ci
         working-directory: frontend
 
       - name: Compilar Frontend
@@ -134,5 +147,5 @@ jobs:
         run: npm install -g vercel
 
       - name: Desplegar en Vercel
-        run: vercel --prod --yes --token ${{ secrets.VERCEL_TOKEN }}
+        run: vercel --prod --yes --token "${{ secrets.VERCEL_TOKEN }}"
         working-directory: frontend

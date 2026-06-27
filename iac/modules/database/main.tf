@@ -1,22 +1,13 @@
-data "aws_vpc" "vpc_por_defecto" {
-  default = true
-}
-
-data "aws_subnets" "sub_redes_por_defecto" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.vpc_por_defecto.id]
-  }
-}
-
-data "aws_security_group" "grupo_seguridad_por_defecto" {
-  name   = "default"
-  vpc_id = data.aws_vpc.vpc_por_defecto.id
-}
-
 resource "aws_db_subnet_group" "rds_subnet_group" {
   name       = "${var.nombre_instancia_rds}-subnet-group"
-  subnet_ids = data.aws_subnets.sub_redes_por_defecto.ids
+  subnet_ids = var.public_subnet_ids
+
+  lifecycle {
+    precondition {
+      condition     = length(var.public_subnet_ids) >= 2 && length(distinct(var.public_subnet_availability_zones)) >= 2
+      error_message = "El DB subnet group de RDS requiere al menos dos subnets en dos AZs distintas. Active create_missing_public_subnet_for_lab y configure additional_public_subnet_availability_zone."
+    }
+  }
 }
 
 resource "aws_db_instance" "tienda_virtual_mysql" {
@@ -30,7 +21,7 @@ resource "aws_db_instance" "tienda_virtual_mysql" {
   username                = var.usuario_base_datos
   password                = var.contrasenha_base_datos
   db_subnet_group_name    = aws_db_subnet_group.rds_subnet_group.name
-  vpc_security_group_ids  = [data.aws_security_group.grupo_seguridad_por_defecto.id]
+  vpc_security_group_ids  = [var.default_security_group_id]
   publicly_accessible     = var.rds_publicly_accessible
   skip_final_snapshot     = true
   deletion_protection     = false

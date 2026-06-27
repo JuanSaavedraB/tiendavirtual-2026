@@ -8,26 +8,10 @@ resource "aws_ecs_cluster" "cluster_tienda_virtual_servicios" {
   name = var.nombre_cluster
 }
 
-data "aws_vpc" "vpc_por_defecto" {
-  default = true
-}
-
-data "aws_subnets" "sub_redes_por_defecto" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.vpc_por_defecto.id]
-  }
-}
-
-data "aws_security_group" "grupo_seguridad_por_defecto" {
-  name   = "default"
-  vpc_id = data.aws_vpc.vpc_por_defecto.id
-}
-
 resource "aws_security_group" "alb_security_group" {
   name        = "${var.nombre_cluster}-alb-sg"
   description = "Permite trafico HTTP/HTTPS hacia el ALB"
-  vpc_id      = data.aws_vpc.vpc_por_defecto.id
+  vpc_id      = var.vpc_id
 
   ingress {
     from_port   = 80
@@ -54,7 +38,7 @@ resource "aws_security_group" "alb_security_group" {
 resource "aws_security_group" "ecs_security_group" {
   name        = "${var.nombre_cluster}-ecs-sg"
   description = "Permite trafico del ALB a ECS en 8080"
-  vpc_id      = data.aws_vpc.vpc_por_defecto.id
+  vpc_id      = var.vpc_id
 
   ingress {
     from_port       = 8080
@@ -199,15 +183,22 @@ resource "aws_lb" "tienda_virtual_load_balancer" {
   name               = "tienda-virtual-alb"
   internal           = false
   load_balancer_type = "application"
-  subnets            = data.aws_subnets.sub_redes_por_defecto.ids
+  subnets            = var.public_subnet_ids
   security_groups    = [aws_security_group.alb_security_group.id]
+
+  lifecycle {
+    precondition {
+      condition     = length(var.public_subnet_ids) >= 2 && length(distinct(var.public_subnet_availability_zones)) >= 2
+      error_message = "El ALB requiere al menos dos subnets en dos AZs distintas. Active create_missing_public_subnet_for_lab y configure additional_public_subnet_availability_zone."
+    }
+  }
 }
 
 resource "aws_lb_target_group" "tg_ventas" {
   name        = "tg-tienda-ventas"
   port        = 8080
   protocol    = "HTTP"
-  vpc_id      = data.aws_vpc.vpc_por_defecto.id
+  vpc_id      = var.vpc_id
   target_type = "ip"
 
   health_check {
@@ -224,7 +215,7 @@ resource "aws_lb_target_group" "tg_logistica" {
   name        = "tg-tienda-logistica"
   port        = 8080
   protocol    = "HTTP"
-  vpc_id      = data.aws_vpc.vpc_por_defecto.id
+  vpc_id      = var.vpc_id
   target_type = "ip"
 
   health_check {
@@ -281,8 +272,8 @@ resource "aws_ecs_service" "servicio_ventas" {
   }
 
   network_configuration {
-    subnets          = data.aws_subnets.sub_redes_por_defecto.ids
-    security_groups  = [aws_security_group.ecs_security_group.id, data.aws_security_group.grupo_seguridad_por_defecto.id]
+    subnets          = var.public_subnet_ids
+    security_groups  = [aws_security_group.ecs_security_group.id, var.default_security_group_id]
     assign_public_ip = true
   }
 
@@ -310,8 +301,8 @@ resource "aws_ecs_service" "servicio_logistica" {
   }
 
   network_configuration {
-    subnets          = data.aws_subnets.sub_redes_por_defecto.ids
-    security_groups  = [aws_security_group.ecs_security_group.id, data.aws_security_group.grupo_seguridad_por_defecto.id]
+    subnets          = var.public_subnet_ids
+    security_groups  = [aws_security_group.ecs_security_group.id, var.default_security_group_id]
     assign_public_ip = true
   }
 

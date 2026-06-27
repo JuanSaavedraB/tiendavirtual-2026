@@ -3,6 +3,26 @@ variable "nombre_cluster" {
   description = "Nombre del clúster ECS donde se desplegará la tarea"
 }
 
+variable "vpc_id" {
+  type        = string
+  description = "ID de la VPC compartida desde el modulo networking"
+}
+
+variable "default_security_group_id" {
+  type        = string
+  description = "ID del security group default de la VPC"
+}
+
+variable "public_subnet_ids" {
+  type        = list(string)
+  description = "Subnets publicas compartidas para ALB y ECS"
+}
+
+variable "public_subnet_availability_zones" {
+  type        = list(string)
+  description = "AZs de las subnets publicas compartidas"
+}
+
 variable "familia_tarea_ventas" {
   type        = string
   description = "Nombre de la familia de tareas ECS de ventas"

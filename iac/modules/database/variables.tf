@@ -3,6 +3,26 @@ variable "nombre_instancia_rds" {
   type        = string
 }
 
+variable "vpc_id" {
+  description = "ID de la VPC compartida desde el modulo networking"
+  type        = string
+}
+
+variable "default_security_group_id" {
+  description = "ID del security group default de la VPC"
+  type        = string
+}
+
+variable "public_subnet_ids" {
+  description = "Subnets publicas compartidas para el subnet group RDS en el laboratorio"
+  type        = list(string)
+}
+
+variable "public_subnet_availability_zones" {
+  description = "AZs de las subnets publicas compartidas para RDS"
+  type        = list(string)
+}
+
 variable "usuario_base_datos" {
   description = "Usuario administrador de RDS"
   type        = string
